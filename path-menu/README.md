@@ -10,6 +10,8 @@ folder.
 - Finds absolute paths, `~/` paths, paths relative to the terminal's folder, names with spaces
   (`Screenshot 2026-10-30 at 16.36.42.png`), paths that wrapped onto the next line, and
   editor suffixes (`main.ts:12:3`, `notes.md#L4`).
+- Finds bare file names too: `reference-concept.png` that is not in the terminal's folder is
+  looked up in the project below it (git's file list, or a bounded `find`), two matches at most.
 - Lists only paths that exist, newest (lowest on screen) first, at most six.
 - Keeps Herdr's own terminal menu items (Split, Zoom, Close) below them.
 - macOS opens with `open`, Linux with `xdg-open`, Windows with `explorer`.

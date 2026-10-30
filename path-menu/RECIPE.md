@@ -27,6 +27,9 @@ show it in its folder. Herdr's own items stay below.
   punctuation and `:12`, `:12:3`, `#L4` suffixes are dropped. Relative paths resolve
   against the pane's folder. The longest candidate that exists wins; duplicates, `/` and the
   pane's own folder are skipped. Order: lowest row first, right to left.
+- A bare `name.ext` that does not exist in the pane's folder is looked up below it:
+  `git ls-files --cached --others --exclude-standard` in a work tree, else `find -maxdepth 6`
+  (skipping `.git` and `node_modules`); up to two matches per name, twelve names per menu.
 - Clicking a name runs `open <path>` (`xdg-open` on Linux, `explorer` on Windows); "Finder"
   runs `open -R <path>` (Linux: opens the parent folder; Windows: `explorer /select,`). Both
   close the menu. ↑/↓ and Enter work on every row as in Herdr's menu.
