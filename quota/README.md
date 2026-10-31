@@ -1,10 +1,15 @@
-# Agent quota for Herdr
+# Agent quota and system load for Herdr
 
 Your coding agents' usage limits in the [Herdr](https://herdr.dev) status bar: one slim bar per
 limit, so Claude's 5-hour and weekly limits show side by side. Quiet until it matters: bars turn
 amber at 60%, orange at 80% and red at 92%. Click it for details and options.
 
-![Agent quota](preview.png)
+Optional second mod: live CPU, RAM and GPU load beside it, so you do not need Activity Monitor
+to see what your agents do to your Mac. See [System load](#system-load-optional-second-mod).
+
+![System load and agent quota in the Herdr status bar](preview-bar.png)
+
+![Agent quota popup](preview.png)
 
 - **Every limit at a glance:** Claude 5-hour and weekly, Codex weekly, and any other provider
   [`quota-axi`](https://github.com/kunchenguid/quota-axi) knows (Cursor, GitHub Copilot, Grok, Kimi).
