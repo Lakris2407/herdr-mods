@@ -75,6 +75,22 @@ it on its own `PATH` (common when Herdr starts from the Dock), it asks your logi
 (`$SHELL -lic`). The mod itself makes no network requests and stores no tokens; `quota-axi` reads
 your local Claude, Codex and other CLI sign-ins to ask each provider for your usage.
 
+## System load (optional second mod)
+
+`mods/system` shows CPU, memory and GPU load next to the quota: a small live graph of the last
+36 seconds and the percent for each, in the same green, amber, orange and red scale. Hover for
+details (user and system CPU, GB of memory used); click to open Activity Monitor. macOS only.
+
+It reads `iostat`, `vm_stat`, `sysctl` and `ioreg` every 3 seconds; none need root. Memory is
+Activity Monitor's "Memory Used" (app memory, wired and compressed).
+
+Install: copy `mods/system` to `~/.config/herdr-app/mods/system` and add a block before
+`status-quota` in the status row:
+
+```json
+{ "id": "status-system", "type": "block", "content": { "mod": "system" }, "size": { "px": 330 } }
+```
+
 ## Credits
 
 - Quota data: [quota-axi](https://github.com/kunchenguid/quota-axi) by kunchenguid (MIT).
