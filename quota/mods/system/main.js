@@ -77,19 +77,22 @@ export default class System extends View {
 
   render(cx) {
     const t = theme(), now = this.last;
+    // Narrow status bar: drop the graphs first, then the GPU, so CPU and RAM always show.
+    const w = this.width ?? Infinity, graphs = w >= 300, gpu = w >= 170;
     const metric = (key, label) => {
       const m = now?.[key];
       if (now && !m) return null;
       return h_flex().id(`sys-${key}`).gap(5).items_center().flex_none().tooltip(m?.tip ?? label)
         .child(div().text_size(10).text_color(t.dim).child(label))
-        .child(graph(this.history[key], t))
+        .when(graphs, el => el.child(graph(this.history[key], t)))
         .child(div().min_w(26).text_size(11).text_color(m && m.pct >= 60 ? level(m.pct) : t.muted).child(m ? `${Math.round(m.pct)}%` : "–"));
     };
-    return h_flex().id("system").size_full().px(12).gap(12).items_center().justify_end().overflow_hidden()
+    return h_flex().id("system").size_full().px(graphs ? 12 : 8).gap(graphs ? 12 : 8).items_center().justify_end().overflow_hidden()
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted).cursor_pointer()
+      .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       .on_click(() => exec("open", ["-a", "Activity Monitor"]).catch(() => {}))
       .when(Boolean(this.error) && !now, el => el.child(div().text_color(t.dim).tooltip(this.error).child("System load unavailable")))
-      .when(!this.error || Boolean(now), el => el.children([metric("cpu", "CPU"), metric("ram", "RAM"), metric("gpu", "GPU")].filter(Boolean)))
+      .when(!this.error || Boolean(now), el => el.children([metric("cpu", "CPU"), metric("ram", "RAM"), gpu && metric("gpu", "GPU")].filter(Boolean)))
       .child(div().w(1).h(12).ml(2).flex_none().bg(t.border));
   }
 }

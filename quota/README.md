@@ -51,9 +51,12 @@ to see what your agents do to your Mac. See [System load](#system-load-optional-
    ```json
    { "id": "status", "type": "row", "size": { "px": 28 }, "resizable": false, "children": [
      { "id": "status-main", "type": "block", "content": { "mod": "workspace-status" }, "size": { "weight": 1 } },
-     { "id": "status-quota", "type": "block", "content": { "mod": "quota" }, "size": { "px": 360 } }
+     { "id": "status-quota", "type": "block", "content": { "mod": "quota" }, "size": { "weight": 3.6 }, "min": 130 }
    ] }
    ```
+
+   Weights, not fixed pixels: on a narrow window every status block keeps a share, and the quota
+   draws shorter bars without window labels, then percents only, so every provider stays visible.
 
 4. Check it: `herdr-app check ~/.config/herdr-app/mods/quota`.
 
@@ -93,8 +96,10 @@ Install: copy `mods/system` to `~/.config/herdr-app/mods/system` and add a block
 `status-quota` in the status row:
 
 ```json
-{ "id": "status-system", "type": "block", "content": { "mod": "system" }, "size": { "px": 330 } }
+{ "id": "status-system", "type": "block", "content": { "mod": "system" }, "size": { "weight": 3.3 }, "min": 120 }
 ```
+
+On a narrow status bar it drops the graphs, then the GPU, so CPU and RAM always show.
 
 ## Credits
 

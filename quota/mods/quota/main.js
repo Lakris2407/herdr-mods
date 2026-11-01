@@ -142,11 +142,15 @@ export default class Quota extends View {
     const data = shared("quota.data"), error = shared("quota.error"), o = options(), now = Date.now();
     const stale = !data || now - data.at > STALE;
     const list = (data?.providers ?? []).filter(p => !o.hidden.includes(p.id) && (signedIn(p) || o.signedOut));
+    // Narrow status bar: shorter bars and no window labels, then percents only, so every provider shows.
+    const width = this.width ?? Infinity, need = list.reduce((n, p) => n + p.windows.filter(x => o.kinds[x.kind] ?? false).length, 0);
+    const per = need ? (width - 24 - list.length * 46) / need : Infinity;
+    const barW = per >= 96 ? 34 : per >= 60 ? 20 : 0, labels = per >= 96;
     const parts = [];
     list.forEach((p, i) => {
       if (i > 0) parts.push(div().w(1).h(12).flex_none().bg(t.border));
       const windows = p.windows.filter(w => o.kinds[w.kind] ?? false);
-      parts.push(h_flex().id(`q-${p.id}`).gap(9).items_center().flex_none()
+      parts.push(h_flex().id(`q-${p.id}`).gap(labels ? 9 : 6).items_center().flex_none()
         .tooltip(windows.map(w => `${p.label} ${w.label}: ${w.percentUsed}% used${w.resetsAt && Date.parse(w.resetsAt) > now ? `, resets in ${until(w.resetsAt, now)}` : ""}`).join("\n") || `${p.label}: not signed in`)
         .child(h_flex().gap(5).items_center()
           .child(this.glyph(p, 12, t))
@@ -155,14 +159,15 @@ export default class Quota extends View {
         .children(windows.map(w => {
           const pc = pace(w, now);
           return h_flex().gap(5).items_center()
-            .child(div().text_size(10).text_color(t.dim).child(short(w, windows.filter(x => x.kind === w.kind).length > 1)))
-            .child(bar(w, 34, 4, now, t))
+            .when(labels, el => el.child(div().text_size(10).text_color(t.dim).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
+            .when(barW > 0, el => el.child(bar(w, barW, 4, now, t)))
             .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.muted).child(`${Math.round(w.percentUsed)}%`))
             .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(8).text_color(level(Math.max(60, w.percentUsed))).child("▲")));
         })));
     });
-    return h_flex().id("quota").size_full().px(12).gap(11).items_center().justify_end().overflow_hidden()
+    return h_flex().id("quota").size_full().px(labels ? 12 : 8).gap(labels ? 11 : 7).items_center().justify_end().overflow_hidden()
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted).cursor_pointer()
+      .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       .when(stale, el => el.opacity(0.6))
       .on_click(() => this.openMenu())
       .on_mouse_down("right", () => this.openMenu())
