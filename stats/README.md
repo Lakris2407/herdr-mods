@@ -50,39 +50,28 @@ terminal. The mod sends nothing anywhere except your own `gh` queries to GitHub.
 
 ## Install
 
-Or ask the agent running in Herdr: "add the herdr.dev mod Lakris2407/herdr-stats".
+Ask the agent running in Herdr: "add the Herdr mod at github.com/Lakris2407/herdr-mods/tree/main/stats". Or by hand,
+after the [one-time setup](../README.md#one-time-setup):
 
 1. Copy `mods/stats` to `~/.config/herdr-app/mods/stats` and run
    `herdr-app check ~/.config/herdr-app/mods/stats`.
-2. Herdr's own layouts and mods are read-only, so clone the layout and the tab bar:
-
-   ```sh
-   herdr-app do layout.clone '{"name":"main","as":"main-plus"}'
-   herdr-app do mod.clone '{"name":"tabs","as":"tabs-plus"}'
-   ```
-
-3. In `~/.config/herdr-app/layouts/main-plus.json`, use `tabs-plus` for the `tabs` block, and add the
-   panel to the side panel stack (`panel-body`), next to Files and Changes:
+2. Add the panel to the side-panel stack (`panel-body`) in `~/.config/herdr-app/layouts/main-plus.json`:
 
    ```json
    { "id": "stats", "type": "block", "content": { "mod": "stats" } }
    ```
 
-4. In `~/.config/herdr-app/mods/tabs-plus/main.js`, add `"stats"` to the enabled panels and a button
-   beside the others:
-
-   ```js
-   .child(panelButton("stats", "Stats", "mods/stats/stats.svg"))
-   ```
+3. Give it a tab-bar button, as in the [one-time setup](../README.md#one-time-setup):
+   `panelButton("stats", "Stats", "mods/stats/stats.svg")`.
 
 ## Tests
 
 ```sh
-node --test
+npm test   # from the repo root
 ```
 
 `mods/stats/stats.js` holds all the counting and has no Herdr imports, so the tests run in plain Node.
 
 ## License
 
-MIT
+MIT, see [LICENSE](../LICENSE).

@@ -46,42 +46,26 @@ waits or runs, every 60 s when idle, load every 60 s.
 
 ## Install
 
-Or ask the agent running in Herdr: "add the herdr.dev mod Lakris2407/herdr-runners".
+Ask the agent running in Herdr: "add the Herdr mod at github.com/Lakris2407/herdr-mods/tree/main/runners". Or by hand,
+after the [one-time setup](../README.md#one-time-setup):
 
 1. Copy `mods/runners` to `~/.config/herdr-app/mods/runners` and run
    `herdr-app check ~/.config/herdr-app/mods/runners`.
-2. Herdr's own layouts and mods are read-only, so clone the layout and the tab bar:
-
-   ```sh
-   herdr-app do layout.clone '{"name":"main","as":"main-plus"}'
-   herdr-app do mod.clone '{"name":"tabs","as":"tabs-plus"}'
-   ```
-
-3. In `~/.config/herdr-app/layouts/main-plus.json`, use `tabs-plus` for the `tabs` block, add the
-   panel to the side panel stack (`panel-body`), and put the chip in the status row:
+2. In `~/.config/herdr-app/layouts/main-plus.json`, add the panel to the side-panel stack
+   (`panel-body`) and the chip to the status row:
 
    ```json
    { "id": "runners", "type": "block", "content": { "mod": "runners" } }
    ```
 
    ```json
-   { "id": "status", "type": "row", "size": { "px": 28 }, "resizable": false, "children": [
-     { "id": "status-main", "type": "block", "content": { "mod": "workspace-status" }, "size": { "weight": 1 } },
-     { "id": "status-runners", "type": "block", "content": { "mod": "runners", "props": { "view": "chip" } },
-       "size": { "weight": 2.6 }, "min": 120 }
-   ] }
+   { "id": "status-runners", "type": "block", "content": { "mod": "runners", "props": { "view": "chip" } },
+     "size": { "weight": 2.6 }, "min": 120 }
    ```
 
-   Use weights, not fixed pixels, for the status blocks: then every block gets a share at any
-   window width, and each one draws less when it gets less room.
-4. In `~/.config/herdr-app/mods/tabs-plus/main.js`, add `"runners"` to the enabled panels and a
-   button beside the others (or use the tab-bar menu in [Extras](#extras)):
-
-   ```js
-   .child(panelButton("runners", "Runners", "mods/runners/runners.svg"))
-   ```
-
-5. Create `~/.config/herdr-app/runners.json` (below). To try the mod first, write
+3. Give the panel a tab-bar button, as in the [one-time setup](../README.md#one-time-setup):
+   `panelButton("runners", "Runners", "mods/runners/runners.svg")`.
+4. Create `~/.config/herdr-app/runners.json` (below). To try the mod first, write
    `{ "demo": true }`: the panel then shows made-up machines and jobs.
 
 ## Configure: `~/.config/herdr-app/runners.json`
@@ -148,10 +132,9 @@ are read but not counted as waiting. The optional history file has one JSON reco
 times: { request, lock, end } }` with times in epoch seconds; `hosts` maps `host` to a machine's
 `lanes` name. History gives the Finished list, the timeline's past, and the usual length of each job.
 
-## Extras
+## Turn parts off
 
-**Tab-bar menu:** right-click any panel button in `tabs-plus` to choose which buttons show (hide
-Files and Changes if you never use them). See [`extras/tabs-plus-panel-menu.md`](extras/tabs-plus-panel-menu.md).
+Use [Controls](../controls/) to hide the chip or the panel button.
 
 ## What it runs
 
@@ -163,7 +146,7 @@ tokens; `gh` and ssh keep their own credentials.
 ## Tests
 
 ```sh
-npm test
+npm test   # from the repo root
 ```
 
 The tests run the data code under Node with an in-memory `herdr` stub: no config, demo data, a full

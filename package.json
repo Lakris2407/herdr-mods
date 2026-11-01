@@ -1,7 +1,7 @@
 {
-  "name": "herdr-runners",
+  "name": "herdr-mods",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test test/" },
+  "scripts": { "test": "node --test" },
   "engines": { "node": ">=22" }
 }

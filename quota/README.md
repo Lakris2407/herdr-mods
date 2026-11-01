@@ -32,35 +32,19 @@ to see what your agents do to your Mac. See [System load](#system-load-optional-
 
 ## Install
 
-1. Copy `mods/quota` to `~/.config/herdr-app/mods/quota`.
-2. Herdr's own layouts are read-only, so clone one and put the quota block in its status bar.
-   Clone `main` (this switches to the clone):
+Ask the agent running in Herdr: "add the Herdr mod at github.com/Lakris2407/herdr-mods/tree/main/quota". Or by hand,
+after the [one-time setup](../README.md#one-time-setup):
 
-   ```sh
-   herdr-app do layout.clone '{"name":"main","as":"main-plus"}'
-   ```
-
-3. In `~/.config/herdr-app/layouts/main-plus.json`, replace the status block
+1. Copy `mods/quota` to `~/.config/herdr-app/mods/quota` and run
+   `herdr-app check ~/.config/herdr-app/mods/quota`.
+2. Add the block to the status row in `~/.config/herdr-app/layouts/main-plus.json`:
 
    ```json
-   { "id": "status", "type": "block", "content": { "mod": "workspace-status" }, "size": { "px": 28 } }
+   { "id": "status-quota", "type": "block", "content": { "mod": "quota" }, "size": { "weight": 3.6 }, "min": 130 }
    ```
 
-   with a row that holds both:
-
-   ```json
-   { "id": "status", "type": "row", "size": { "px": 28 }, "resizable": false, "children": [
-     { "id": "status-main", "type": "block", "content": { "mod": "workspace-status" }, "size": { "weight": 1 } },
-     { "id": "status-quota", "type": "block", "content": { "mod": "quota" }, "size": { "weight": 3.6 }, "min": 130 }
-   ] }
-   ```
-
-   Weights, not fixed pixels: on a narrow window every status block keeps a share, and the quota
-   draws shorter bars without window labels, then percents only, so every provider stays visible.
-
-4. Check it: `herdr-app check ~/.config/herdr-app/mods/quota`.
-
-Or ask the agent running in Herdr: "add the herdr.dev mod Lakris2407/herdr-quota".
+   On a narrow window the quota draws shorter bars without window labels, then percents only, so
+   every provider stays visible.
 
 ## Options
 
@@ -109,4 +93,4 @@ On a narrow status bar it drops the graphs, then the GPU, so CPU and RAM always 
 
 ## License
 
-MIT
+MIT, see [LICENSE](../LICENSE).

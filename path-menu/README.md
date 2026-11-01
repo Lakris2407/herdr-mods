@@ -18,17 +18,16 @@ folder.
 
 ## Install
 
-1. Copy `mods/path-menu` to `~/.config/herdr-app/mods/path-menu`.
-2. Herdr's own layouts are read-only, so use a clone (`herdr-app do layout.clone '{"name":"main","as":"main-plus"}'`
-   switches to it) and set its root field:
+Ask the agent running in Herdr: "add the Herdr mod at github.com/Lakris2407/herdr-mods/tree/main/path-menu". Or by hand,
+after the [one-time setup](../README.md#one-time-setup):
+
+1. Copy `mods/path-menu` to `~/.config/herdr-app/mods/path-menu` and run
+   `herdr-app check ~/.config/herdr-app/mods/path-menu`.
+2. Set the root field of `~/.config/herdr-app/layouts/main-plus.json`:
 
    ```json
    "terminal_menu": "path-menu"
    ```
-
-3. Check it: `herdr-app check ~/.config/herdr-app/mods/path-menu`.
-
-Or ask the agent running in Herdr: "add the herdr.dev mod Lakris2407/herdr-path-menu".
 
 ## How it works
 
