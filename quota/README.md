@@ -56,7 +56,11 @@ starting options with `props`, for example to hide a provider:
 ```
 
 `props` takes `hidden` (provider ids), `kinds` (`{ "session": true, "weekly": true, "monthly": true, "model": false }`),
-`signedOut` and `names`.
+`signedOut`, `names` and `remaining` (default `false`).
+
+Enable **Show remaining instead of used** in the popup to switch the percentages and bar fills
+in both views. Colors and pace warnings still reflect usage, so nearly exhausted limits stay red.
+Used-share windows stay labeled as used because they are not independent allowances.
 
 Keys: bind `quota:menu` (open the popup) and `quota:refresh` (read now) in `keys.json`.
 
@@ -64,8 +68,20 @@ Keys: bind `quota:menu` (open the popup) and `quota:refresh` (read now) in `keys
 
 The mod runs `quota-axi --json` every 2 minutes, and when you click Refresh. If Herdr cannot find
 it on its own `PATH` (common when Herdr starts from the Dock), it asks your login shell
-(`$SHELL -lic`). The mod itself makes no network requests and stores no tokens; `quota-axi` reads
-your local Claude, Codex and other CLI sign-ins to ask each provider for your usage.
+(`$SHELL -lic`). Both commands run on the selected space's machine. The mod itself makes no
+network requests and stores no tokens; `quota-axi` reads that machine's Claude, Codex and other
+CLI sign-ins to ask each provider for your usage.
+
+## Remote machines
+
+The status bar follows the selected space's machine. Install `quota-axi` on each remote machine
+(`npm install -g quota-axi`) and sign into your providers there. Credentials stay on that machine.
+The popup identifies the machine and stays on it until closed, including when you click Refresh.
+
+Results and errors are cached separately per machine. Switching machines fetches immediately;
+an unreachable remote or missing dependency shows an error instead of using your local account.
+Options are shared across machines. Sessions using a custom `CODEX_HOME` are not detected:
+the report uses the CLI environment of the machine's Herdr core.
 
 ## System load (optional second mod)
 
@@ -84,6 +100,25 @@ Install: copy `mods/system` to `~/.config/herdr-app/mods/system` and add a block
 ```
 
 On a narrow status bar it drops the graphs, then the GPU, so CPU and RAM always show.
+
+## Antigravity limits
+
+The provider list includes an **Antigravity: Claude/GPT limits** option.
+Turn it off to hide its Claude/GPT session and weekly windows in the strip and popup
+without hiding Gemini. This does not affect the standalone Claude provider.
+The choice is saved; it defaults to enabled so existing installations keep their display.
+Layouts may also set `agyClaudeGpt: false` in quota props as the initial preference.
+
+## Windows
+
+Install Node.js and `quota-axi` (`npm install -g quota-axi`) and ensure the npm global
+bin directory is on the environment PATH available to Herdr. If the native executable
+cannot start, the quota mod tries the Windows npm shim through `cmd.exe /d /s /c`.
+No Git Bash or hard-coded Node installation path is required.
+
+Run `quota-axi --json` in a terminal to check your provider sign-ins. Then run
+`herdr-app check ~/.config/herdr-app/mods/quota`. The optional system-load mod
+remains macOS-only.
 
 ## Credits
 

@@ -1,11 +1,13 @@
 // Agent quota in the status bar: one slim bar per limit window, from `quota-axi --json`.
 // Click it for details and options. The same mod draws the popup (props().menu).
+import { visibleWindows } from "./quota-windows.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand } from "herdr";
+import { runQuotaCommand } from "./quota-command.js";
+import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, spaces } from "herdr";
 
 const EVERY = 120000, STALE = 10 * 60000;
-const DEFAULTS = { kinds: { session: true, weekly: true, monthly: true, model: false }, hidden: [], signedOut: false, names: false };
+const DEFAULTS = { kinds: { session: true, weekly: true, monthly: true, model: false }, hidden: [], signedOut: false, names: false, remaining: false };
 const ICONS = { claude: "claude", codex: "codex", grok: "grok", kimi: "kimi", copilot: "copilot", cursor: "cursor" };
 const TINT = { claude: "#d97757", kimi: "#1783ff", copilot: "#8f6bf2" };
 const KINDS = [["session", "5-hour limit"], ["weekly", "Weekly limit"], ["monthly", "Monthly limit"], ["model", "Model limits"]];
@@ -17,6 +19,8 @@ function options() {
 }
 const setOptions = change => setShared("quota.options", { ...options(), ...change });
 const signedIn = p => p.windows.length > 0;
+const quotaMachine = () => props()?.menu ? props().machine ?? null : spaces().find(s => s.active)?.machine ?? null;
+const stateKey = (name, on = quotaMachine()) => `${name}:${JSON.stringify(on)}`;
 
 // Calm until it matters: green, amber from 60%, orange from 80%, red from 92%.
 function level(pct) {
@@ -60,17 +64,20 @@ function pace(w, now) {
   return { diff, ahead: diff >= 10 && w.percentUsed >= 20 };
 }
 
-function bar(w, width, height, now, t) {
-  const e = elapsed(w, now), pct = Math.min(100, Math.max(0, w.percentUsed));
+const percent = (w, remaining) => remaining && !w.shareOf ? 100 - w.percentUsed : w.percentUsed;
+const percentText = (w, remaining) => `${Math.round(percent(w, remaining))}% ${remaining && !w.shareOf ? "remaining" : "used"}`;
+
+function bar(w, width, height, now, t, remaining) {
+  const e = elapsed(w, now), pct = Math.min(100, Math.max(0, percent(w, remaining)));
   return div().relative().w(width).h(height).flex_none().rounded(height / 2).bg(t.border)
-    .child(div().absolute().left(0).top(0).h(height).w(Math.max(pct > 0 ? height : 0, width * pct / 100)).rounded(height / 2).bg(level(pct)))
-    .when(e !== null, el => el.child(div().absolute().top(-2).h(height + 4).w(1).left(Math.round(width * e)).bg(t.foreground).opacity(0.45)));
+    .child(div().absolute().left(0).top(0).h(height).w(Math.max(pct > 0 ? height : 0, width * pct / 100)).rounded(height / 2).bg(level(w.percentUsed)))
+    .when(e !== null, el => el.child(div().absolute().top(-2).h(height + 4).w(1).left(Math.round(width * (remaining && !w.shareOf ? 1 - e : e))).bg(t.foreground).opacity(0.45)));
 }
 
-async function load() {
-  let r = await exec("quota-axi", ["--json"]).catch(e => ({ code: -1, stderr: String(e) }));
+async function load(on = null) {
+  let r = await runQuotaCommand(exec, { on }).catch(e => ({ code: -1, stderr: String(e) }));
   // Apps started from the Dock miss PATH entries set in the shell's rc file (npm, nvm, mise): ask the person's own shell.
-  if (r.code !== 0) r = await exec("sh", ["-c", 'exec "${SHELL:-/bin/sh}" -lic "quota-axi --json" </dev/null']).catch(e => ({ code: -1, stderr: String(e) }));
+  if (r.code !== 0) r = await exec("sh", ["-c", 'exec "${SHELL:-/bin/sh}" -lic "quota-axi --json" </dev/null'], { on }).catch(e => ({ code: -1, stderr: String(e) }));
   if (r.code !== 0) throw new Error(`quota-axi failed: ${(r.stderr || "").trim().split("\n").pop() || `exit ${r.code}`}`);
   // An interactive shell can print a banner first; the report starts at the first brace.
   const data = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
@@ -78,8 +85,13 @@ async function load() {
     at: Date.now(),
     providers: (data.providers ?? []).map(p => ({
       id: p.provider, label: p.label ?? p.provider, plan: p.plan ?? null, status: p.state?.status ?? null,
-      windows: (p.windows ?? []).filter(w => typeof w.percentUsed === "number")
-        .map(w => ({ id: w.id, label: w.label, kind: w.kind, percentUsed: w.percentUsed, resetsAt: w.resetsAt ?? null, windowSeconds: w.windowSeconds ?? null })),
+      windows: (p.windows ?? []).map(w => ({
+        id: w.id, label: w.label, kind: w.kind, shareOf: w.shareOf ?? null,
+        // Newer quota-axi reports remaining percentages; shares are not independent allowances.
+        percentUsed: Number.isFinite(w.percentUsed) ? w.percentUsed
+          : w.shareOf == null && Number.isFinite(w.percentRemaining) ? 100 - w.percentRemaining : null,
+        resetsAt: w.resetsAt ?? null, windowSeconds: w.windowSeconds ?? null,
+      })).filter(w => Number.isFinite(w.percentUsed)),
     })),
   };
 }
@@ -88,13 +100,14 @@ export default class Quota extends View {
   init(_props, cx) {
     // The app's program table knows each agent's icon and whether it is a one-color glyph.
     this.programs = {};
+    this.loading = new Set();
     cx.spawn(async cx => {
       const list = await knownAgents().catch(() => []);
       for (const a of list) this.programs[a.key] = a;
       cx.notify();
     });
     if (props()?.menu) return;
-    this.asked = shared("quota.refresh") ?? 0;
+    this.machine = quotaMachine();
     this.refresh(cx);
     cx.timer.every(EVERY, cx => this.refresh(cx));
     // Key commands: "quota:menu" opens the popup, "quota:refresh" reads the quota now.
@@ -117,29 +130,30 @@ export default class Quota extends View {
   }
 
   refresh(cx) {
-    if (this.loading) return;
-    this.loading = true;
+    const on = quotaMachine();
+    if (this.loading.has(on)) return;
+    this.loading.add(on);
     cx.spawn(async cx => {
-      try { setShared("quota.data", await load()); setShared("quota.error", null); }
-      catch (e) { setShared("quota.error", String(e.message ?? e)); }
-      finally { this.loading = false; cx.notify(); }
+      try { setShared(stateKey("quota.data", on), await load(on)); setShared(stateKey("quota.error", on), null); }
+      catch (e) { setShared(stateKey("quota.error", on), String(e.message ?? e)); }
+      finally { this.loading.delete(on); cx.notify(); }
     });
   }
 
   openMenu() {
-    const data = shared("quota.data"), o = options();
+    const data = shared(stateKey("quota.data")), o = options();
     const all = data?.providers ?? [], shown = all.filter(p => !o.hidden.includes(p.id) && (signedIn(p) || o.signedOut));
     const details = shown.reduce((n, p) => n + 30 + p.windows.length * 42, 0);
-    const toggles = (KINDS.length + all.length + 2) * 28;
-    openOverlay({ mod: "quota", kind: "popup", width: 300, height: Math.min(720, 44 + details + 40 + toggles + 12), props: { menu: true, start: props() ?? {} } });
+    const toggles = (KINDS.length + all.length + 3 + (all.some(p => p.id === "agy") ? 1 : 0)) * 32;
+    openOverlay({ mod: "quota", kind: "popup", width: 300, height: Math.min(720, 44 + details + 40 + toggles + 77), props: { menu: true, machine: quotaMachine(), start: props() ?? {} } });
   }
 
   render(cx) {
     const t = theme();
     if (props()?.menu) return this.menu(t);
-    const ask = shared("quota.refresh") ?? 0;
-    if (ask !== this.asked) { this.asked = ask; this.refresh(cx); }
-    const data = shared("quota.data"), error = shared("quota.error"), o = options(), now = Date.now();
+    const on = quotaMachine();
+    if (on !== this.machine) { this.machine = on; this.refresh(cx); }
+    const data = shared(stateKey("quota.data")), error = shared(stateKey("quota.error")), o = options(), now = Date.now();
     const stale = !data || now - data.at > STALE;
     const list = (data?.providers ?? []).filter(p => !o.hidden.includes(p.id) && (signedIn(p) || o.signedOut));
     // Narrow status bar: shorter bars and no window labels, then percents only, so every provider shows.
@@ -149,9 +163,9 @@ export default class Quota extends View {
     const parts = [];
     list.forEach((p, i) => {
       if (i > 0) parts.push(div().w(1).h(12).flex_none().bg(t.border));
-      const windows = p.windows.filter(w => o.kinds[w.kind] ?? false);
+      const windows = visibleWindows(p, o).filter(w => o.kinds[w.kind] ?? false);
       parts.push(h_flex().id(`q-${p.id}`).gap(labels ? 9 : 6).items_center().flex_none()
-        .tooltip(windows.map(w => `${p.label} ${w.label}: ${w.percentUsed}% used${w.resetsAt && Date.parse(w.resetsAt) > now ? `, resets in ${until(w.resetsAt, now)}` : ""}`).join("\n") || `${p.label}: not signed in`)
+        .tooltip(windows.map(w => `${p.label} ${w.label}: ${percentText(w, o.remaining)}${w.resetsAt && Date.parse(w.resetsAt) > now ? `, resets in ${until(w.resetsAt, now)}` : ""}`).join("\n") || `${p.label}: not signed in`)
         .child(h_flex().gap(5).items_center()
           .child(this.glyph(p, 12, t))
           .when(o.names || !ICONS[p.id], el => el.child(div().text_color(signedIn(p) ? t.muted : t.dim).child(p.label))))
@@ -160,42 +174,43 @@ export default class Quota extends View {
           const pc = pace(w, now);
           return h_flex().gap(5).items_center()
             .when(labels, el => el.child(div().text_size(10).text_color(t.dim).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
-            .when(barW > 0, el => el.child(bar(w, barW, 4, now, t)))
-            .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.muted).child(`${Math.round(w.percentUsed)}%`))
+            .when(barW > 0, el => el.child(bar(w, barW, 4, now, t, o.remaining)))
+            .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.muted).child(`${Math.round(percent(w, o.remaining))}%`))
             .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(8).text_color(level(Math.max(60, w.percentUsed))).child("▲")));
         })));
     });
     return h_flex().id("quota").size_full().px(labels ? 12 : 8).gap(labels ? 11 : 7).items_center().justify_end().overflow_hidden()
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted).cursor_pointer()
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
+      .tooltip(`Quota on ${on ?? "this computer"}`)
       .when(stale, el => el.opacity(0.6))
       .on_click(() => this.openMenu())
       .on_mouse_down("right", () => this.openMenu())
-      .when(parts.length === 0, el => el.child(div().text_color(t.dim).child(error ? "Quota unavailable" : data ? "No quota to show" : "Quota…")))
+      .when(parts.length === 0, el => el.child(div().text_color(t.dim).child(error ? "Quota unavailable" : data ? "No quota to show" : "Loading quota…")))
       .children(parts);
   }
 
   menu(t) {
-    const data = shared("quota.data"), error = shared("quota.error"), o = options(), now = Date.now();
+    const data = shared(stateKey("quota.data")), error = shared(stateKey("quota.error")), o = options(), now = Date.now();
     const all = data?.providers ?? [];
-    const toggle = (label, on, act, id) => h_flex().id(id).h(28).px(8).gap(9).rounded(6).items_center().cursor_pointer()
+    const toggle = (label, on, act, id) => h_flex().id(id).h(32).px(10).gap(10).rounded(6).items_center().cursor_pointer()
       .hover(s => s.bg(t.hover)).on_click(act)
-      .child(div().size(14).flex_none().rounded(4).border_1().border_color(on ? level(0) : t.input).bg(on ? level(0) : t.popover)
-        .when(on, el => el.child(div().size_full().flex().items_center().justify_center().text_size(10).text_color(t.popover).child("✓"))))
-      .child(div().flex_1().text_color(t.foreground).child(label));
+      .child(div().flex_1().text_color(on ? t.foreground : t.muted).child(label))
+      .child(div().size(16).flex_none().flex().items_center().justify_center()
+        .when(on, el => el.child(svg("mods/quota/check.svg").size(16).text_color(t.accent))));
     const heading = text => div().px(8).pt(10).pb(4).text_size(10.5).text_color(t.dim).child(text);
     const details = all.filter(p => !o.hidden.includes(p.id) && (signedIn(p) || o.signedOut)).map(p => v_flex().px(8).py(4).gap(4)
       .child(h_flex().gap(6).items_center()
         .child(this.glyph(p, 13, t))
         .child(div().font_semibold().text_color(t.foreground).child(p.label))
         .child(div().text_size(10.5).text_color(t.dim).child(signedIn(p) ? (p.plan ?? "") : "not signed in")))
-      .children(p.windows.map(w => {
+      .children(visibleWindows(p, o).map(w => {
         const pc = pace(w, now);
         return v_flex().gap(3)
           .child(h_flex().gap(8).items_center()
             .child(div().w(62).flex_none().truncate().text_size(11.5).text_color(t.muted).child(w.kind === "session" ? "5 hours" : w.kind === "weekly" ? "Week" : w.label))
-            .child(bar(w, 120, 5, now, t))
-            .child(div().flex_1().text_right().text_size(11.5).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.foreground).child(`${Math.round(w.percentUsed)}%`)))
+            .child(bar(w, 120, 5, now, t, o.remaining))
+            .child(div().flex_1().text_right().text_size(11.5).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.foreground).child(`${Math.round(percent(w, o.remaining))}%`)))
           .child(div().pl(70).text_size(10.5).text_color(t.dim).child([
             w.resetsAt && Date.parse(w.resetsAt) > now ? `resets in ${until(w.resetsAt, now)}` : null,
             pc ? (Math.abs(pc.diff) < 5 ? "on pace" : pc.diff > 0 ? `${pc.diff}% ahead of pace` : `${-pc.diff}% under pace`) : null,
@@ -203,16 +218,22 @@ export default class Quota extends View {
       })));
     return v_flex().id("quota-menu").w_full().p(5).bg(t.popover).text_size(12.5).overflow_y_scrollbar()
       .child(h_flex().px(8).pt(4).pb(2).items_center()
-        .child(div().flex_1().text_size(11).text_color(t.dim).child(data ? `Agent quota · updated ${ago(data.at, now)}` : "Agent quota"))
+        .child(div().flex_1().text_size(11).text_color(t.dim).child(data ? `Quota ${o.remaining ? "remaining" : "used"} · ${ago(data.at, now)}` : "Agent quota"))
         .child(div().id("quota-refresh").px(6).rounded(5).cursor_pointer().text_size(11).text_color(t.muted).hover(s => s.bg(t.hover))
-          .on_click(() => setShared("quota.refresh", Date.now())).child("Refresh")))
+          .on_click((_event, cx) => this.refresh(cx)).child("Refresh")))
+      .child(div().px(8).py(4).text_size(11).text_color(t.muted).child(`Machine: ${quotaMachine() ?? "This computer"}`))
       .when(Boolean(error), el => el.child(div().px(8).py(4).text_size(11).text_color(level(95)).child(error)))
       .children(details)
       .child(div().mx(8).my(6).h(1).bg(t.border))
-      .child(heading("Show in the status bar"))
+      .child(toggle("Show remaining instead of used", o.remaining, () => setOptions({ remaining: !o.remaining }), "remaining"))
+      .child(heading("Limits to show in the status bar"))
       .children(KINDS.map(([kind, label]) => toggle(label, o.kinds[kind], () => setOptions({ kinds: { ...o.kinds, [kind]: !o.kinds[kind] } }), `kind-${kind}`)))
+      .child(div().mx(8).my(6).h(1).bg(t.border))
+      .child(heading("Providers"))
       .children(all.map(p => toggle(p.label, !o.hidden.includes(p.id),
         () => setOptions({ hidden: o.hidden.includes(p.id) ? o.hidden.filter(x => x !== p.id) : [...o.hidden, p.id] }), `prov-${p.id}`)))
+      .when(all.some(p => p.id === "agy"), el => el.child(toggle("Antigravity: Claude/GPT limits", o.agyClaudeGpt !== false,
+        () => setOptions({ agyClaudeGpt: o.agyClaudeGpt === false }), "agy-claude-gpt")))
       .child(toggle("Signed-out providers", o.signedOut, () => setOptions({ signedOut: !o.signedOut }), "signed-out"))
       .child(toggle("Provider names", o.names, () => setOptions({ names: !o.names }), "names"));
   }
