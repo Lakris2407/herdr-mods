@@ -87,10 +87,20 @@ the report uses the CLI environment of the machine's Herdr core.
 
 `mods/system` shows CPU, memory and GPU load next to the quota: a small live graph of the last
 36 seconds and the percent for each, in the same green, amber, orange and red scale. Hover for
-details (user and system CPU, GB of memory used); click to open Activity Monitor. macOS only.
+details (user and system CPU, GB of memory used); click to open Activity Monitor on this Mac.
 
-It reads `iostat`, `vm_stat`, `sysctl` and `ioreg` every 3 seconds; none need root. Memory is
-Activity Monitor's "Memory Used" (app memory, wired and compressed).
+Like the quota, it follows the selected space's machine: a remote space shows that machine's
+load, with its name in front. Switching machines reads at once and starts the graphs over; an
+unreachable machine shows "System load unavailable", never this computer's load. Nothing needs
+installing on the remote. One `sh` call every 3 seconds picks the branch by `uname`; none need root.
+
+- **macOS** reads `iostat`, `vm_stat`, `sysctl` and `ioreg`. Memory is Activity Monitor's
+  "Memory Used" (app memory, wired and compressed).
+- **Linux** reads `/proc/stat`, `/proc/meminfo` and, with an NVIDIA GPU, `nvidia-smi`. Inside a
+  container (a Coder or Kubernetes workspace, Docker) it reads the cgroup v2 files instead, so
+  the numbers are the container's own: CPU against its `cpu.max` quota, and memory as the working
+  set (usage minus reclaimable file cache, as `kubectl top` counts it) against `memory.max`.
+  The tooltip says "container limit" when one applies.
 
 Install: copy `mods/system` to `~/.config/herdr-app/mods/system` and add a block before
 `status-quota` in the status row:
@@ -118,7 +128,7 @@ No Git Bash or hard-coded Node installation path is required.
 
 Run `quota-axi --json` in a terminal to check your provider sign-ins. Then run
 `herdr-app check ~/.config/herdr-app/mods/quota`. The optional system-load mod
-remains macOS-only.
+reads macOS and Linux machines, not Windows.
 
 ## Credits
 
