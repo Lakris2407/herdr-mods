@@ -40,7 +40,7 @@ after the [one-time setup](../README.md#one-time-setup):
 2. Add the block to the status row in `~/.config/herdr-app/layouts/main-plus.json`:
 
    ```json
-   { "id": "status-quota", "type": "block", "content": { "mod": "quota" }, "size": { "weight": 3.6 }, "min": 130 }
+   { "id": "status-quota", "type": "block", "content": { "mod": "quota" }, "size": { "weight": 1.8 }, "min": 130 }
    ```
 
    On a narrow window the quota draws shorter bars without window labels, then percents only, so
@@ -108,7 +108,7 @@ Install: copy `mods/system` to `~/.config/herdr-app/mods/system` and add a block
 `status-quota` in the status row:
 
 ```json
-{ "id": "status-system", "type": "block", "content": { "mod": "system" }, "size": { "weight": 3.3 }, "min": 120 }
+{ "id": "status-system", "type": "block", "content": { "mod": "system" }, "size": { "weight": 2.9 }, "min": 120 }
 ```
 
 On a narrow status bar it drops the graphs, then the GPU, so CPU and RAM always show.

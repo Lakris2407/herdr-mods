@@ -60,7 +60,7 @@ after the [one-time setup](../README.md#one-time-setup):
 
    ```json
    { "id": "status-runners", "type": "block", "content": { "mod": "runners", "props": { "view": "chip" } },
-     "size": { "weight": 2.6 }, "min": 120 }
+     "size": { "weight": 3.0 }, "min": 120 }
    ```
 
 3. Give the panel a tab-bar button, as in the [one-time setup](../README.md#one-time-setup):
