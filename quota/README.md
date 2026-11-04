@@ -91,8 +91,10 @@ details (user and system CPU, GB of memory used); click to open Activity Monitor
 
 Like the quota, it follows the selected space's machine: a remote space shows that machine's
 load, with its name in front. Switching machines reads at once and starts the graphs over; an
-unreachable machine shows "System load unavailable", never this computer's load. Nothing needs
-installing on the remote. One `sh` call every 3 seconds picks the branch by `uname`; none need root.
+unreachable machine shows "System load unavailable", never this computer's load. If a machine
+stops answering, its last numbers stay dimmed, with the error and their age in the tooltip, and
+after a minute they give way to "System load unavailable". Nothing needs installing on the
+remote. One `sh` call every 3 seconds picks the branch by `uname`; none need root.
 
 - **macOS** reads `iostat`, `vm_stat`, `sysctl` and `ioreg`. Memory is Activity Monitor's
   "Memory Used" (app memory, wired and compressed).
