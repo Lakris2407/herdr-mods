@@ -93,16 +93,21 @@ export function readLinux(out) {
 }
 
 // The script's first line names the branch that ran; the rest is that branch's output.
+// Anything else (a login banner, a broken connection) is an error, never a 0% reading.
 export function parseLoad(stdout) {
   const nl = stdout.indexOf("\n");
-  const os = stdout.slice(0, nl).trim(), out = stdout.slice(nl + 1);
-  return os === "darwin" ? readMac(out) : readLinux(out);
+  const os = (nl < 0 ? stdout : stdout.slice(0, nl)).trim(), out = nl < 0 ? "" : stdout.slice(nl + 1);
+  if (os === "darwin") return readMac(out);
+  if (os === "linux") return readLinux(out);
+  throw new Error(`Unexpected output: ${(stdout.trim().split("\n")[0] || "nothing").slice(0, 80)}`);
 }
 
 // `machine` is a name from `hc machine ls`, or null for this computer. Never falls back to
 // reading this computer when a remote machine fails: the caller shows the error instead.
 export async function readLoad(exec, machine = null) {
   const r = await exec("sh", ["-c", SCRIPT], { on: machine });
-  if (r.code !== 0 && !r.stdout) throw new Error((r.stderr || `exit ${r.code}`).trim());
-  return parseLoad(r.stdout);
+  const failed = () => new Error((r.stderr || `exit ${r.code}`).trim());
+  if (r.code !== 0 && !r.stdout) throw failed();
+  try { return parseLoad(r.stdout); }
+  catch (e) { throw r.code !== 0 && r.stderr ? failed() : e; }
 }

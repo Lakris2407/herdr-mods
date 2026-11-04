@@ -97,3 +97,15 @@ test("a failed remote read is an error, never a local read", async () => {
     /hub: connection refused/);
   assert.equal(calls.length, 1);
 });
+
+test("output that is not the script's is an error, never a 0% reading", async () => {
+  assert.throws(() => parseLoad("Welcome to hub\nsome banner\n"), /Unexpected output: Welcome to hub/);
+  assert.throws(() => parseLoad(""), /Unexpected output: nothing/);
+  await assert.rejects(
+    readLoad(async () => ({ code: 0, stdout: "Last login: Mon\n" }), "hub"),
+    /Unexpected output: Last login/);
+  // A failed connection that printed a banner reports the connection's own error.
+  await assert.rejects(
+    readLoad(async () => ({ code: 255, stdout: "Last login: Mon\n", stderr: "hub: connection closed\n" }), "hub"),
+    /^Error: hub: connection closed$/);
+});
