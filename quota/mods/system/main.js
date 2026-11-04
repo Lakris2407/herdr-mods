@@ -7,6 +7,8 @@ import { exec, theme, settings, spaces } from "herdr";
 import { readLoad } from "./load.js";
 
 const EVERY = 3000, HISTORY = 12, WATCH = 500;
+// After a failed read the last numbers stay, dimmed; after this long they are dropped.
+const GIVE_UP = 60000;
 
 // Same scale as the quota bars: green, amber from 60%, orange from 80%, red from 92%.
 function level(pct) {
@@ -48,6 +50,7 @@ export default class System extends View {
   reset() {
     this.history = { cpu: [], ram: [], gpu: [] };
     this.last = null;
+    this.at = null;
     this.error = null;
   }
 
@@ -61,13 +64,19 @@ export default class System extends View {
         // A late reply from the machine before a switch never replaces the new one's data.
         if (machine !== this.machine) return;
         this.last = now;
+        this.at = Date.now();
         this.error = null;
         for (const key of ["cpu", "ram", "gpu"]) {
           if (!now[key]) continue;
           this.history[key].push(now[key].pct);
           if (this.history[key].length > HISTORY) this.history[key].shift();
         }
-      } catch (e) { if (machine === this.machine) this.error = String(e.message ?? e); }
+      } catch (e) {
+        if (machine !== this.machine) return;
+        this.error = String(e.message ?? e);
+        // A machine that has not answered for a while shows as unavailable, not as old numbers.
+        if (this.at && Date.now() - this.at > GIVE_UP) { this.history = { cpu: [], ram: [], gpu: [] }; this.last = null; }
+      }
       finally {
         this.loading = false;
         cx.notify();
@@ -84,10 +93,13 @@ export default class System extends View {
     const label = machine ? 14 + machine.length * 7 : 0;
     const w = (this.width ?? Infinity) - label, graphs = w >= (now && !now.gpu ? 210 : 300), gpu = w >= 170;
     const where = machine ? `${machine} · ` : "";
+    // A failed read keeps the last numbers, dimmed, with the error and their age in the tooltip.
+    const stale = Boolean(this.error) && Boolean(now);
+    const age = stale ? `Not updated for ${Math.round((Date.now() - this.at) / 1000)} s (${this.error}) · ` : "";
     const metric = (key, name) => {
       const m = now?.[key];
       if (now && !m) return null;
-      return h_flex().id(`sys-${key}`).gap(5).items_center().flex_none().tooltip(where + (m?.tip ?? name))
+      return h_flex().id(`sys-${key}`).gap(5).items_center().flex_none().tooltip(age + where + (m?.tip ?? name)).when(stale, el => el.opacity(0.45))
         .child(div().text_size(10).text_color(t.dim).child(name))
         .when(graphs, el => el.child(graph(this.history[key], t)))
         .child(div().min_w(26).text_size(11).text_color(m && m.pct >= 60 ? level(m.pct) : t.muted).child(m ? `${Math.round(m.pct)}%` : "–"));
