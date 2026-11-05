@@ -34,7 +34,10 @@ slots, the lanes of a lock-based job script, and each machine's load over ssh.
 
 Click the chip: show the panel (`layout.select` `panel-body` → `runners`, `layout.show` `panel`),
 or hide it when it shows. A GitHub job opens on GitHub (https only); a lanes job opens its log
-folder. Toasts: a job waiting past `waitAlertMinutes` (once per job), a slot going offline.
+folder. Toasts: a job waiting past `waitAlertMinutes` (once per job); slots offline for a minute (one
+toast per machine), and one more naming every one of them when the last is back. Clicking an
+offline toast runs `runners.panel`; every copy gets it, and the first to claim `runners.show` shows
+the panel (or one popup when the layout has none).
 
 ## Built from
 

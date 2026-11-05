@@ -83,12 +83,13 @@ export function byRun(list) {
 export const pressure = (m) => (m.load == null || !m.cores ? null : m.load / m.cores);
 
 // Offline toasts. A slot that drops for a moment and comes back says nothing: it must stay offline
-// OFF_MS first. Then one toast per machine, not per slot, and one more when they are all back.
-// `was`: { since: {slot: ms}, told: {slot: machine} } from the last snapshot. Returns the next state
-// and what to post: [{ kind: "off" | "back", machine, names }].
+// OFF_MS first. Then one toast per machine, not per slot, and one more when they are all back, naming
+// every slot that was told offline (`returned` keeps the ones back early until the last one is).
+// `was`: { since: {slot: ms}, told: {slot: machine}, returned: {machine: [slot]} } from the last
+// snapshot. Returns the next state and what to post: [{ kind: "off" | "back", machine, names }].
 export const OFF_MS = 60000;
 export function offlineNews(was, machines, now) {
-  const since = {}, told = { ...(was?.told ?? {}) }, posts = [];
+  const since = {}, told = { ...(was?.told ?? {}) }, returned = { ...(was?.returned ?? {}) }, posts = [];
   for (const m of machines) {
     const off = m.runners.filter((r) => r.status === "offline");
     for (const r of off) since[r.name] = was?.since?.[r.name] ?? now;
@@ -96,12 +97,22 @@ export function offlineNews(was, machines, now) {
     if (fresh.length) { posts.push({ kind: "off", machine: m.name, names: fresh }); for (const n of fresh) told[n] = m.name; }
     const back = m.runners.filter((r) => told[r.name] && r.status === "online").map((r) => r.name);
     for (const n of back) delete told[n];
-    if (back.length && !Object.values(told).includes(m.name)) posts.push({ kind: "back", machine: m.name, names: back });
+    // A slot told offline again is no longer back.
+    const all = [...(returned[m.name] ?? []).filter((n) => !told[n]), ...back];
+    delete returned[m.name];
+    if (!all.length) continue;
+    if (Object.values(told).includes(m.name)) returned[m.name] = all;
+    else posts.push({ kind: "back", machine: m.name, names: all });
   }
-  // A slot no machine lists any more is forgotten.
+  // A slot or machine no one lists any more is forgotten.
   const listed = new Set(machines.flatMap((m) => m.runners.map((r) => r.name)));
   for (const n of Object.keys(told)) if (!listed.has(n)) delete told[n];
-  return { state: { since, told }, posts };
+  const shown = new Set(machines.map((m) => m.name));
+  for (const [machine, names] of Object.entries(returned)) {
+    const kept = names.filter((n) => listed.has(n));
+    if (shown.has(machine) && kept.length) returned[machine] = kept; else delete returned[machine];
+  }
+  return { state: { since, told, returned }, posts };
 }
 
 // The words of one offline toast.

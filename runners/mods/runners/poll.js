@@ -15,6 +15,14 @@ const BUSY_MS = 20000, IDLE_MS = 60000, LOAD_MS = 60000, LOCK_MS = 45000;
 export const snapshot = () => shared(KEY) ?? null;
 export const refresh = () => setShared(REFRESH, Date.now());
 
+// Every copy of the mod (chip, panel, popup, timeline) gets a command such as `runners.panel`. The
+// first copy to claim it acts, so one toast click opens one popup.
+export function claim(key, ms, now = Date.now()) {
+  if ((shared(key) ?? 0) > now) return false;
+  setShared(key, now + ms);
+  return true;
+}
+
 // When the snapshot was last read or last tried: a failed read keeps `at`, the time of the data it shows.
 const tried = (s) => Math.max(s?.at ?? 0, s?.errorAt ?? 0);
 
