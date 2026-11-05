@@ -60,6 +60,13 @@ test("PRs with the same number in two repos both count; repos rank by merges", (
   assert.equal(s.commits30, 10);
 });
 
+test("this week's commits add up across repos; unknown stays null", () => {
+  const now = at("2026-11-01T12:00:00");
+  const s = buildStats({ prs: [], commits: { "o/a": 7, "o/b": 3 }, commitsThisWeek: { "o/a": 2, "o/b": 1 }, now, weeks: 1 });
+  assert.equal(s.commitsThisWeek, 3);
+  assert.equal(buildStats({ prs: [], commits: {}, now, weeks: 1 }).commitsThisWeek, null);
+});
+
 test("aiTools reads trailers, sign-off lines and branch names, not review mentions", () => {
   assert.deepEqual(aiTools({ messages: ["fix\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"] }), { claude: true, codex: false });
   assert.deepEqual(aiTools({ headRefName: "codex/bugs" }), { claude: false, codex: true });
