@@ -23,6 +23,10 @@ GitHub Actions runners and any machine you can reach over ssh.
   from how long each job usually takes.
 - **Toasts** when a job waits longer than `waitAlertMinutes`, and when a slot goes offline.
 - Click a GitHub job to open it on GitHub; click a lanes job to open its log folder.
+- **Keyboard:** `pane.go` moves onto the panel like onto a pane. `↑` `↓` walk everything you can
+  click (the buttons, waiting jobs, running slots, finished jobs, `Show N older`) with a 2px ring,
+  `Enter` or `Space` opens it, `R` refreshes, `T` opens the timeline, and `Esc` goes back toward the
+  terminals. On the status-bar chip, `Enter` shows the panel and `Space` the quick look.
 
 ![Timeline](preview-timeline.png)
 

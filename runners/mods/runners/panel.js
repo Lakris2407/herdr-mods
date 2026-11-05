@@ -2,11 +2,13 @@
 // It leads with exceptions: failures and waiting jobs stand out, passed jobs stay quiet and drop off.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme } from "herdr";
+import { theme, run, layout } from "herdr";
 import { snapshot, refresh } from "./poll.js";
 import { configPath } from "./config.js";
 import { waiting, finished, summary, medianWait, duration, ago, label, jobKey } from "./model.js";
 import { jobRow, loadBar, loadText, button, colors, ink, onFill, freshness, slotColor, openLanes, openJob, runTime } from "./ui.js";
+import { readable } from "./colors.js";
+import { step, current, leaveSide } from "./keys.js";
 
 const MIN = 60000, FINISHED = 5;
 // A passed job stays in the list this long; failures stay the full hour.
@@ -15,7 +17,43 @@ const RECENT = 10 * MIN;
 const failed = (j) => j.conclusion !== "success" && j.conclusion !== "cancelled";
 
 export class Panel {
-  init() {}
+  init(_props, cx) {
+    this.handle = cx.focus_handle();
+    this.cur = null; // the id the keyboard cursor is on
+    this.last = 0; // and its place, for when that item leaves
+  }
+
+  focus() {
+    this.handle.focus();
+  }
+
+  // Everything you can act on registers here while the panel renders, in reading order, so the keyboard
+  // walks the list the mouse sees. The 2px ring (3:1) sits outside the item; away from the cursor it
+  // takes the background, so nothing moves when the cursor does. `fn` gets the event's context.
+  act(id, el, fn, t, label, role = "link") {
+    this.actions.push({ id, fn });
+    const on = this.focused && id === this.cur;
+    return this.edge(el, t, on ? readable(t.accent, t.background, 3) : t.background).id(`k-${id}`)
+      .role(role).accessibility_label(label).when(on, (e) => e.aria_active_descendant());
+  }
+
+  // The same 2px edge around an item the keyboard skips (a free slot), so it lines up with the rest.
+  edge(el, t, color = t.background) {
+    return div().rounded(8).border_2().border_color(color).child(el);
+  }
+
+  key(e, cx) {
+    const ids = this.actions.map((a) => a.id), k = e.keystroke;
+    if (k === "down" || k === "up") Object.assign(this, step(ids, this.cur, this.last, k === "down" ? 1 : -1));
+    else if (k === "enter" || k === "space") this.actions.find((a) => a.id === current(ids, this.cur, this.last))?.fn(cx);
+    else if (k === "r") refresh();
+    else if (k === "t") openLanes();
+    else if (k === "escape") run("pane.go", { direction: leaveSide(layout(), "runners") });
+    else if (k === "left" || k === "right") run("pane.go", { direction: k });
+    else return;
+    cx.stop_propagation();
+    cx.notify();
+  }
 
   tile(value, hint, t, color) {
     return v_flex().flex_1().min_w(0).px(10).py(8).gap(2).rounded(8).border_1().border_color(t.border)
@@ -52,7 +90,7 @@ export class Panel {
       : r.status === "offline" ? "offline" : r.status === "unknown" ? "no status" : "free";
     const unknown = !j && r.status === "unknown";
     const fg = j ? t.accent_foreground : r.status === "offline" ? onFill(c.off, t) : unknown ? k.sub : k.onIdle;
-    return h_flex().id(`slot-${r.name}`).gap(6).items_center().text_size(10)
+    const row = h_flex().id(`slot-${r.name}`).gap(6).items_center().text_size(10)
       .when(Boolean(j), (e) => e.cursor_pointer().on_click(() => openJob(j)).tooltip(`${r.name} · ${label(j)} · ${j.branch} · ${runTime(j, s.typical, now)}`))
       .when(!j, (e) => e.tooltip(unknown ? `${r.name}: no status (GitHub needs repo admin to list it)` : `${r.name} · ${r.status === "online" ? "free" : r.status}`))
       .child(div().w(64).flex_none().truncate().text_color(k.sub).child(r.label ?? r.name))
@@ -63,6 +101,8 @@ export class Panel {
         // How far the job is through its usual length; amber past 1.2x, when it runs slow.
         .when(pct != null, (e) => e.child(div().absolute().left_0().bottom_0().h(2)
           .bg(now - j.started > usual * 1.2 ? c.wait : t.accent_foreground).w(`${Math.round(pct * 100)}%`))));
+    return j ? this.act(`slot-${r.name}`, row, () => openJob(j), t, `${r.name}: ${label(j)} on ${j.branch}, ${runTime(j, s.typical, now)}`)
+      : this.edge(row, t);
   }
 
   machine(m, s, t, now) {
@@ -78,7 +118,7 @@ export class Panel {
         .child(loadBar(m, t, 56)).child(div().truncate().child(loadText(m)))))
       .when(Boolean(m.warm) && m.warm !== "none", (e) => e.child(div().id(`warm-${m.name}`).truncate().text_size(10).text_color(k.sub)
         .tooltip(`warm: ${m.warm}`).child(`warm: ${m.warm}`)))
-      .child(v_flex().gap(3).children(m.runners.map((r) => this.slot(r, r.job ? jobs.get(r.job) : null, s, t, now))));
+      .child(v_flex().gap(1).children(m.runners.map((r) => this.slot(r, r.job ? jobs.get(r.job) : null, s, t, now))));
   }
 
   finished(s, t, now, tags) {
@@ -97,11 +137,15 @@ export class Panel {
         .child(`✓ Nothing failed. The last job finished ${ago(f[0].completed, now)}.`)))
       .children(shown.map((j) => {
         const [right, color] = mark(j);
-        return jobRow(`f-${j.id}`, j, { right, rightColor: color, sub: sub(j), tag: tags }, t);
+        return this.act(`f-${j.id}`, jobRow(`f-${j.id}`, j, { right, rightColor: color, sub: sub(j), tag: tags }, t), () => openJob(j), t,
+          `${label(j)}, ${right}, ${sub(j)}`);
       }))
-      .when(hidden > 0 || this.showAll, (e) => e.child(div().id("f-more").px(6).pt(4).cursor_pointer().text_size(11).text_color(t.accent)
-        .on_click((_e, cx) => { this.showAll = !this.showAll; cx.notify(); })
-        .child(this.showAll ? "Show fewer" : `Show ${hidden} older`))), t, bad.length ? c.off : null);
+      .when(hidden > 0 || this.showAll, (e) => {
+        const more = this.showAll ? "Show fewer" : `Show ${hidden} older`;
+        const toggle = (cx) => { this.showAll = !this.showAll; cx.notify(); };
+        return e.child(this.act("f-more", div().id("f-more").px(4).py(2).cursor_pointer().text_size(11).text_color(t.accent)
+          .on_click((_e, cx) => toggle(cx)).child(more), toggle, t, more, "button"));
+      }), t, bad.length ? c.off : null);
   }
 
   body(s, t, now) {
@@ -117,7 +161,11 @@ export class Panel {
         .child(this.tile(mw == null ? "—" : duration(mw), "wait today", t)))
       // Waiting jobs are the first thing to act on, so they sit above the machines, and only when there are some.
       .when(w.length > 0, (e) => e.child(this.card("Waiting", `oldest ${duration(sum.longest)}`, v_flex().gap(1).children(
-        w.map((j) => jobRow(`w-${j.id}`, j, { right: duration(now - j.created), rightColor: c.wait, sub: `needs ${j.labels.join(", ")} · ${j.branch}`, tag: tags }, t))), t)))
+        w.map((j) => {
+          const sub = `needs ${j.labels.join(", ")} · ${j.branch}`;
+          return this.act(`w-${j.id}`, jobRow(`w-${j.id}`, j, { right: duration(now - j.created), rightColor: c.wait, sub, tag: tags }, t), () => openJob(j), t,
+            `${label(j)}, waiting ${duration(now - j.created)}, ${sub}`);
+        })), t)))
       .child(h_flex().flex_wrap().items_start().gap(6).children(s.machines.map((m) => this.machine(m, s, t, now))))
       .child(this.finished(s, t, now, tags));
   }
@@ -131,21 +179,32 @@ export class Panel {
       .child(div().text_color(k.sub).child(s.at ? "Showing the last good data. Refresh tries again." : "Refresh tries again."));
   }
 
-  render() {
+  render(cx) {
     const t = theme(), s = snapshot(), now = Date.now(), fresh = freshness(s, now);
-    return v_flex().id("runners").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border)
+    this.actions = [];
+    this.focused = this.handle.is_focused();
+    const header = h_flex().h(42).flex_none().px(12).gap(4).items_center().border_b(1).border_color(t.border)
+      .child(div().font_semibold().text_size(13).child("Runners"))
+      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(fresh.stale ? colors(t).wait : ink(t).sub).child(fresh.text))
+      .child(this.act("runners-lanes", button("runners-lanes", "Timeline", t, () => openLanes()), () => openLanes(), t, "Open the timeline", "button"))
+      .child(this.act("runners-refresh", button("runners-refresh", "Refresh", t, () => refresh()), () => refresh(), t, "Refresh now", "button"));
+    const body = v_flex().id("runners-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(8)
+      .when(Boolean(s?.error), (e) => e.child(this.error(s, t, now)))
+      .when(!s, (e) => e.child(div().p(4).text_color(ink(t).sub).child("Reading the runners…")))
+      .when(Boolean(s?.missing), (e) => e.child(this.card("Set up", "", v_flex().gap(4).text_size(11).text_color(t.muted)
+        .child(`Create ${configPath()} with your repos and machines.`)
+        .child("See the README for every field, or try it with { \"demo\": true }."), t)))
+      .when(Boolean(s?.at), (e) => e.child(this.body(s, t, now)));
+    // The cursor lands on the first item, and moves on when its item leaves; one more frame shows it there.
+    const ids = this.actions.map((a) => a.id), at = current(ids, this.cur, this.last);
+    if (this.focused && at !== this.cur) { this.cur = at; this.last = Math.max(0, ids.indexOf(at)); cx.spawn(async (cx) => cx.notify()); }
+    return v_flex().id("runners").role("pane").accessibility_label("Runners").track_focus(this.handle).on_key_down((e, cx) => this.key(e, cx))
+      .size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border)
       .text_color(t.foreground).text_size(12)
-      .child(h_flex().h(42).flex_none().px(12).gap(6).items_center().border_b(1).border_color(t.border)
-        .child(div().font_semibold().text_size(13).child("Runners"))
-        .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(fresh.stale ? colors(t).wait : ink(t).sub).child(fresh.text))
-        .child(button("runners-lanes", "Timeline", t, () => openLanes()))
-        .child(button("runners-refresh", "Refresh", t, () => refresh())))
-      .child(v_flex().id("runners-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(8)
-        .when(Boolean(s?.error), (e) => e.child(this.error(s, t, now)))
-        .when(!s, (e) => e.child(div().p(4).text_color(ink(t).sub).child("Reading the runners…")))
-        .when(Boolean(s?.missing), (e) => e.child(this.card("Set up", "", v_flex().gap(4).text_size(11).text_color(t.muted)
-          .child(`Create ${configPath()} with your repos and machines.`)
-          .child("See the README for every field, or try it with { \"demo\": true }."), t)))
-        .when(Boolean(s?.at), (e) => e.child(this.body(s, t, now))));
+      .child(header)
+      // The keys, shown only while the panel has the keyboard.
+      .when(this.focused, (e) => e.child(div().flex_none().px(12).py(4).border_b(1).border_color(t.border).truncate()
+        .text_size(10).text_color(ink(t).sub).child("↑ ↓ move · Enter opens · R refreshes · T timeline · Esc leaves")))
+      .child(body);
   }
 }

@@ -29,6 +29,8 @@ export default class Runners extends View {
         const c = await nextCommand();
         if (c === "refresh") refresh();
         if (c === "timeline") openLanes();
+        // "focusable" in mod.json: pane.go hands this copy the keyboard (again after a popup over it closes).
+        if (c === "focus") this.view.focus?.();
         tick(cx);
         cx.notify();
       }
