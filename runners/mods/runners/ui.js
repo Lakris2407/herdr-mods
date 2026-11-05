@@ -2,10 +2,32 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, exec, openOverlay } from "herdr";
-import { label, duration, pressure, jobKey } from "./model.js";
+import { label, duration, pressure, jobKey, ago } from "./model.js";
 import { snapshot } from "./poll.js";
+import { readable, contrast, flatten } from "./colors.js";
 
 export const colors = (t = theme()) => ({ run: t.accent, wait: t.ansi3, off: t.ansi1, ok: t.ansi2, hot: t.ansi11 ?? t.ansi3, idle: t.border });
+
+// Secondary text that stays readable: themes set `dim` for taste, often below 4.5:1.
+// `sub` reads on the view's background, `onIdle` on a free slot's fill, `track` is a bar's empty part.
+export const ink = (t = theme(), bg = t.background) => ({
+  sub: readable(t.muted, bg, 4.5),
+  onIdle: readable(t.muted, flatten(t.border, bg), 4.5),
+  track: readable(flatten(t.dim, bg), bg, 3),
+});
+
+// Text on a colored fill: whichever of the theme's two poles reads better on it.
+export const onFill = (fill, t) => {
+  const f = flatten(fill, t.background);
+  return (contrast(t.background, f) ?? 0) >= (contrast(t.foreground, f) ?? 0) ? t.background : t.foreground;
+};
+
+// How old the data is. A failed read keeps the time of the last good data, so the header never says "just now" over old jobs.
+export function freshness(s, now) {
+  if (!s) return { text: "Loading…", stale: false };
+  if (s.errorAt) return { text: s.at ? `data from ${ago(s.at, now)} · last read failed` : "could not read the runners", stale: true };
+  return { text: `updated ${ago(s.at, now)}`, stale: false };
+}
 
 // The timeline is a window you open, never part of the layout.
 export function openLanes() {
@@ -27,7 +49,7 @@ export function openJob(j) {
 }
 
 export function repoTag(j, t) {
-  return div().w(34).flex_none().py(1).rounded(4).bg(t.surface).text_center().text_size(10).font_semibold()
+  return div().w(34).flex_none().py(1).rounded(4).bg(t.border).text_center().text_size(10).font_semibold()
     .text_color(t[j.color] ?? t.foreground).child(j.short);
 }
 
@@ -47,7 +69,7 @@ export function squares(list, t) {
 export function loadBar(m, t, width = 60) {
   const p = pressure(m), c = colors(t);
   const color = p == null ? t.border : p >= 1.5 ? c.off : p >= 0.9 ? c.hot : p >= 0.6 ? c.wait : c.ok;
-  return div().w(width).h(5).rounded(3).bg(t.surface).overflow_hidden()
+  return div().w(width).h(5).rounded(3).bg(ink(t).track).overflow_hidden()
     .child(div().h_full().rounded(3).bg(color).w(Math.round(width * Math.min(1, p ?? 0))));
 }
 
@@ -59,18 +81,19 @@ export function loadText(m) {
 }
 
 // One job: repo tag, what and where, and a time on the right. `bar` adds progress against the usual length.
-export function jobRow(id, j, { right, rightColor, sub, typical, now }, t) {
+// `tag: false` drops the repo tag, for a setup that watches one repo.
+export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true }, t) {
   const usual = typical?.[jobKey(j)];
   const pct = j.started && usual ? Math.min(1, (now - j.started) / usual) : null;
   // Past 1.2x its usual length, the bar turns amber: this run is slow, not almost done.
   const slow = j.started && usual && now - j.started > usual * 1.2;
   return h_flex().id(id).gap(8).px(6).py(5).items_center().rounded(6).cursor_pointer()
     .hover((e) => e.bg(t.hover)).on_click(() => openJob(j)).tooltip(j.url ? `${j.repo} · open on GitHub` : `${j.repo} · ${j.worktree} · open its logs`)
-    .child(repoTag(j, t))
+    .when(tag, (e) => e.child(repoTag(j, t)))
     .child(v_flex().flex_1().min_w(0).gap(2)
       .child(div().truncate().text_color(t.foreground).child(label(j)))
-      .child(div().truncate().text_size(11).text_color(t.dim).child(sub))
-      .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(t.surface).overflow_hidden()
+      .child(div().truncate().text_size(11).text_color(ink(t).sub).child(sub))
+      .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(ink(t).track).overflow_hidden()
         .child(div().h_full().bg(slow ? t.ansi3 : t.accent).w(`${Math.round(pct * 100)}%`)))))
     .child(div().flex_none().text_size(11).text_color(rightColor ?? t.muted).child(right));
 }
@@ -86,6 +109,6 @@ export function button(id, text, t, onClick) {
 }
 
 export function groupTitle(left, right, t) {
-  return h_flex().justify_between().px(6).text_size(10).font_semibold().text_color(t.dim)
+  return h_flex().justify_between().px(6).text_size(10).font_semibold().text_color(ink(t, t.popover).sub)
     .child(left.toUpperCase()).child(right ?? "");
 }

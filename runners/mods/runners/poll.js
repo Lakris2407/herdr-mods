@@ -15,11 +15,14 @@ const BUSY_MS = 20000, IDLE_MS = 60000, LOAD_MS = 60000, LOCK_MS = 45000;
 export const snapshot = () => shared(KEY) ?? null;
 export const refresh = () => setShared(REFRESH, Date.now());
 
+// When the snapshot was last read or last tried: a failed read keeps `at`, the time of the data it shows.
+const tried = (s) => Math.max(s?.at ?? 0, s?.errorAt ?? 0);
+
 function due(s, now) {
   if (!s) return true;
-  if ((shared(REFRESH) ?? 0) > s.at) return true;
+  if ((shared(REFRESH) ?? 0) > tried(s)) return true;
   const busy = s.jobs.some((j) => j.status !== "completed");
-  return now - s.at >= (busy ? BUSY_MS : IDLE_MS);
+  return now - tried(s) >= (busy ? BUSY_MS : IDLE_MS);
 }
 
 export function tick(cx) {
@@ -31,7 +34,8 @@ export function tick(cx) {
     try {
       next = await read(s, now);
     } catch (e) {
-      next = { ...(s ?? { jobs: [], machines: [], done: {}, typical: {} }), at: now, error: String(e.message ?? e) };
+      // Keep the last good data and its time, so no view calls it fresh.
+      next = { ...(s ?? { at: null, jobs: [], machines: [], done: {}, typical: {} }), errorAt: now, error: String(e.message ?? e) };
     } finally {
       setShared(LOCK, 0);
     }
@@ -44,7 +48,7 @@ export function tick(cx) {
 async function read(prev, now) {
   const config = await loadConfig();
   if (config.demo) return demoSnapshot(now);
-  const fresh = (shared(REFRESH) ?? 0) > (prev?.at ?? 0);
+  const fresh = (shared(REFRESH) ?? 0) > tried(prev);
   const loadDue = fresh || !prev || now - (prev.loadAt ?? 0) >= LOAD_MS;
   const [gh, ln, loads] = await Promise.all([
     loadJobs(config, prev?.done ?? {}, now),
@@ -82,7 +86,7 @@ async function read(prev, now) {
 
   const waiting = new Set(jobs.filter((j) => j.status === "queued").map((j) => j.id));
   const alerted = (prev?.alerted ?? []).filter((id) => waiting.has(id));
-  return { at: now, loadAt: loadDue ? now : prev.loadAt, error: ln?.error ?? null, missing: Boolean(config.missing), jobs, done, machines, typical, alerted,
+  return { at: now, errorAt: null, loadAt: loadDue ? now : prev.loadAt, error: ln?.error ? `Lanes status: ${ln.error}` : null, missing: Boolean(config.missing), jobs, done, machines, typical, alerted,
     alertAfter: config.waitAlertMinutes * 60000 };
 }
 
