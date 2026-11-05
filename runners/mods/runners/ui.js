@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, exec, openOverlay, layout, run } from "herdr";
 import { label, duration, pressure, jobKey } from "./model.js";
-import { snapshot } from "./poll.js";
+import { snapshot, claim } from "./poll.js";
 import { readable, contrast, flatten, roles } from "./colors.js";
 
 // One meaning per color, the same as the other mods (colors.js): amber waits, orange is a busy machine,
@@ -33,6 +33,7 @@ export { freshness } from "./model.js";
 
 // Show the Runners panel in the side panel stack (the popup when the layout has none).
 export function showPanel() {
+  if (!claim("runners.show", 2000)) return;
   const find = (node, id) => node?.id === id ? node : (node?.children ?? []).reduce((f, c) => f ?? find(c, id), null);
   const root = layout();
   if (!find(find(root, "panel-body"), "runners")) return openOverlay({ mod: "runners", kind: "popup", width: 420, height: 480, props: { view: "popup" } });

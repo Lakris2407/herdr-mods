@@ -201,7 +201,33 @@ test("an offline slot speaks after a minute, once per machine, and again when al
   r = model.offlineNews(r.state, m("online", "offline"), 210000);
   assert.deepEqual(r.posts, []);
   r = model.offlineNews(r.state, m("online", "online"), 220000);
-  assert.deepEqual(r.posts, [{ kind: "back", machine: "Claws mini", names: ["unity"] }]);
+  // The toast names every slot that came back, not only the last one.
+  assert.deepEqual(r.posts, [{ kind: "back", machine: "Claws mini", names: ["core", "unity"] }]);
+  assert.equal(model.offlineToast(r.posts[0]).body, "2 runners take jobs again");
+  assert.deepEqual(r.state.returned, {});
+});
+
+test("a slot back early that drops again is not named back", () => {
+  const m = (a, b) => [{ name: "Claws mini", runners: [{ name: "core", status: a }, { name: "unity", status: b }] }];
+  let r = model.offlineNews(undefined, m("offline", "offline"), 0);
+  r = model.offlineNews(r.state, m("offline", "offline"), 60000);
+  r = model.offlineNews(r.state, m("online", "offline"), 70000);
+  assert.deepEqual(r.state.returned, { "Claws mini": ["core"] });
+  r = model.offlineNews(r.state, m("offline", "offline"), 80000);
+  r = model.offlineNews(r.state, m("offline", "offline"), 140000);
+  assert.deepEqual(r.posts, [{ kind: "off", machine: "Claws mini", names: ["core"] }]);
+  assert.deepEqual(r.state.returned, {});
+  r = model.offlineNews(r.state, m("offline", "online"), 150000);
+  assert.deepEqual(r.posts, []);
+  // A machine that leaves the config takes its pending slots with it.
+  assert.deepEqual(model.offlineNews(r.state, [], 160000).state, { since: {}, told: {}, returned: {} });
+});
+
+test("the first copy to claim a command acts, the others skip it", () => {
+  state.shared.clear();
+  assert.equal(poll.claim("runners.show", 2000, 1000), true);
+  assert.equal(poll.claim("runners.show", 2000, 1500), false);
+  assert.equal(poll.claim("runners.show", 2000, 3001), true);
 });
 
 test("two slots of one machine share one toast", () => {
