@@ -43,15 +43,13 @@ export class Chip {
     if (!s) return bar.child("Runners").child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900));
     const sum = summary(s), offline = slots(s).some((r) => r.status === "offline");
     // Narrow status bar: drop the title, then the squares, so the counts always show.
-    // "offline" takes room too; at the narrowest it replaces the title.
     const groups = s.machines.filter((m) => m.runners.length).map((m) => squares(m.runners, t));
-    const need = sum.total * 8 + groups.length * 5 + (offline ? 50 : 0), w = this.width ?? Infinity;
-    const full = w >= 170 + need, squaresFit = w >= 110 + need;
+    const full = (this.width ?? Infinity) >= 170 + sum.total * 8 + groups.length * 5, squaresFit = (this.width ?? Infinity) >= 110 + sum.total * 8 + groups.length * 5;
     const state = sum.waiting
       ? div().text_color(c.wait).child(squaresFit ? `${sum.waiting} waiting` : `${sum.busy}/${sum.total} · ${sum.waiting} waiting`)
       : sum.busy ? div().child(squaresFit ? `${sum.busy} running` : `${sum.busy}/${sum.total} running`) : div().text_color(t.dim).child("idle");
     return bar.on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
-      .when(full || (!squaresFit && !offline), (e) => e.child("Runners"))
+      .when(full || !squaresFit, (e) => e.child("Runners"))
       .when(squaresFit, (e) => e.child(h_flex().gap(5).items_center().children(groups))).child(state)
       .when(offline, (e) => e.child(div().text_color(c.off).child("offline")))
       .when(Boolean(s.error), (e) => e.child(div().text_color(c.off).child("!")));

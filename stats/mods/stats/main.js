@@ -6,7 +6,7 @@ import { theme, shared, setShared, nextCommand } from "herdr";
 import { loadRaw } from "./load.js";
 import { buildStats, duration, delta } from "./stats.js";
 
-const CACHE = "stats.v1", STALE = 30 * 60000, CHECK = 5 * 60000;
+const CACHE = "stats.v2", STALE = 30 * 60000, CHECK = 5 * 60000;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // Checked for dark-theme lightness and color-blind separation in this order (Claude, Codex, Both).
 const AI = [["claude", "Claude", "#d4704f"], ["codex", "Codex", "#3f86e0"], ["both", "Both", "#1baf7a"]];
@@ -49,14 +49,15 @@ export default class Stats extends View {
     cx.notify();
   }
 
-  tile(label, value, hint, t, change = null) {
+  tile(label, value, hint, t, change = null, commits = null) {
     return v_flex().flex_1().min_w(0).gap(1).px(10).py(9).rounded(8).bg(t.raised)
       .child(div().text_size(11).text_color(t.muted).child(label))
       .child(div().text_size(22).font_semibold().child(value))
       .child(h_flex().gap(4).text_size(11).text_color(t.dim)
         .when(Boolean(change), (e) => e.child(div().text_color(change.d > 0 ? t.ansi2 : change.d < 0 ? t.ansi1 : t.dim)
           .child(`${change.d > 0 ? "▲" : change.d < 0 ? "▼" : "•"} ${change.text}`)))
-        .child(div().min_w(0).truncate().child(hint)));
+        .child(div().min_w(0).truncate().child(hint)))
+      .when(commits != null, (e) => e.child(div().text_size(14).font_semibold().text_color(t.foreground).child(commits)));
   }
 
   // One series, so no legend: the card title names it. Values sit on the highlighted bar and the tallest one;
@@ -123,8 +124,8 @@ export default class Stats extends View {
     const weeks = s.weeks, last = weeks.length - 1, today = (new Date().getDay() + 6) % 7;
     return v_flex().gap(8)
       .child(h_flex().gap(6)
-        .child(this.tile("Merged this week", fmt(s.mergedThisWeek), "last week", t, delta(s.mergedThisWeek, s.mergedLastWeek)))
-        .child(this.tile("Merged · 30 days", fmt(s.merged30), "prior 30", t, delta(s.merged30, s.mergedPrev30))))
+        .child(this.tile("Merged this week", fmt(s.mergedThisWeek), "last week", t, delta(s.mergedThisWeek, s.mergedLastWeek), `${fmt(s.commitsThisWeek)} commits`))
+        .child(this.tile("Merged · 30 days", fmt(s.merged30), "prior 30", t, delta(s.merged30, s.mergedPrev30), `${fmt(s.commits30)} commits`)))
       .child(h_flex().gap(6)
         .child(this.tile("Time to merge", duration(s.medianHours), "median · 30 days", t))
         .child(this.tile("Open PRs", fmt(s.open), s.oldestOpenDays == null ? "none open" : `oldest ${s.oldestOpenDays}d`, t)))

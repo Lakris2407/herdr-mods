@@ -13,3 +13,14 @@ export async function runQuotaCommand(exec, options = {}) {
     }
   }
 }
+
+// Windows keeps the gh login in the credential store, which quota-axi cannot read; gh itself can.
+// Read-only, same numbers quota-axi reports; the token never passes through here.
+export async function copilotWindows(exec) {
+  const r = await exec("gh", ["api", "/copilot_internal/user"]);
+  if (r.code !== 0) return null;
+  const user = JSON.parse(r.stdout);
+  return Object.entries(user.quota_snapshots ?? {})
+    .filter(([, q]) => !q.unlimited && Number.isFinite(q.percent_remaining))
+    .map(([id, q]) => ({ id, label: id.replace(/_/g, " "), kind: "monthly", shareOf: null, percentUsed: 100 - q.percent_remaining, resetsAt: user.quota_reset_date_utc ?? null, windowSeconds: null }));
+}

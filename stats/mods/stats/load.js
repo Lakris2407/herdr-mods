@@ -1,7 +1,7 @@
 // Raw rows from GitHub through `gh api graphql`: your PRs in every repo. Bodies and commit messages
 // come only for the last 30 days, where AI share is measured.
 import { exec, readTextFile, appHome } from "herdr";
-import { weekStarts, aiTools } from "./stats.js";
+import { weekStart, weekStarts, aiTools, isClaudeCloudPr } from "./stats.js";
 
 // Optional ~/.config/herdr-app/stats.json:
 //   { "logins": ["me", "me-work"], "workBranch": { "owner/repo": "develop" } }
@@ -65,23 +65,28 @@ async function fetchPrs(config, now, days) {
   return (await Promise.all(jobs)).flat();
 }
 
-// Commits linked to your accounts in each repo you merged into, on its working branch, last 30 days.
+// Commits linked to your accounts in each repo you merged into, on its working branch, for both windows.
 async function fetchCommits(config, now, repos) {
   const ids = await graphql(`query{${config.logins.map((l, i) => `u${i}: user(login:${JSON.stringify(l)}){id}`).join(" ")}}`);
   const authors = config.logins.map((_, i) => ids[`u${i}`]?.id).filter(Boolean);
-  if (!repos.length || !authors.length) return {};
+  if (!repos.length || !authors.length) return { commits: {}, commitsThisWeek: {} };
   const since = new Date(now - 30 * DAY).toISOString();
+  const sinceWeek = new Date(weekStart(now)).toISOString(), until = new Date(now).toISOString();
   const parts = repos.map((full, r) => {
     const [owner, name] = full.split("/"), branch = config.workBranch[full];
     const ref = branch ? `ref(qualifiedName:${JSON.stringify(`refs/heads/${branch}`)})` : "defaultBranchRef";
-    const counts = authors.map((id, a) => `a${a}: history(since:"${since}", author:{id:${JSON.stringify(id)}}){totalCount}`).join(" ");
+    const counts = authors.map((id, a) => `a${a}: history(since:"${since}", until:"${until}", author:{id:${JSON.stringify(id)}}){totalCount} w${a}: history(since:"${sinceWeek}", until:"${until}", author:{id:${JSON.stringify(id)}}){totalCount}`).join(" ");
     return `r${r}: repository(owner:${JSON.stringify(owner)},name:${JSON.stringify(name)}){${ref}{target{... on Commit{${counts}}}}}`;
   });
   const data = await graphql(`query{${parts.join(" ")}}`);
-  return Object.fromEntries(repos.map((full, r) => {
+  const commits = {}, commitsThisWeek = {};
+  repos.forEach((full, r) => {
     const target = data[`r${r}`]?.ref?.target ?? data[`r${r}`]?.defaultBranchRef?.target;
-    return [full, authors.reduce((s, _, a) => s + (target?.[`a${a}`]?.totalCount ?? 0), 0)];
-  }));
+    const total = (prefix) => authors.reduce((s, _, a) => s + (target?.[`${prefix}${a}`]?.totalCount ?? 0), 0);
+    commits[full] = total("a");
+    commitsThisWeek[full] = total("w");
+  });
+  return { commits, commitsThisWeek };
 }
 
 // Reviews = other people's PRs you commented on (Codex/Claude reviews post through your account),
@@ -107,7 +112,7 @@ async function fetchCountsAndOpen(config, now) {
 export async function loadRaw(now = Date.now(), weeks = 12) {
   const config = await loadConfig();
   const [prs, counts] = await Promise.all([fetchPrs(config, now, 91), fetchCountsAndOpen(config, now)]);
-  const recent = [...new Set(prs.filter((pr) => pr.mergedAt && Date.parse(pr.mergedAt) > now - 30 * DAY).map((pr) => pr.repo))];
+  const recent = [...new Set(prs.filter((pr) => !isClaudeCloudPr(pr) && pr.mergedAt && Date.parse(pr.mergedAt) > now - 30 * DAY).map((pr) => pr.repo))];
   const commits = await fetchCommits(config, now, recent);
-  return { prs, commits, ...counts, now, weeks, starts: weekStarts(now, weeks) };
+  return { prs, ...commits, ...counts, now, weeks, starts: weekStarts(now, weeks) };
 }

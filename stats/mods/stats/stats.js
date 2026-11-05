@@ -23,6 +23,8 @@ export function weekStarts(now, count) {
 // A release (develop -> main) repeats work already counted when it merged into develop.
 export const isPromotion = (pr) => pr.headRefName === "develop" && pr.baseRefName === "main";
 
+export const isClaudeCloudPr = (pr) => pr.headRefName?.startsWith("claude/") ?? false;
+
 export function median(values) {
   if (!values.length) return null;
   const s = [...values].sort((a, b) => a - b), mid = s.length >> 1;
@@ -42,9 +44,9 @@ export function aiTools({ body = "", headRefName = "", messages = [] }) {
 }
 
 // prs: [{ repo, number, state, createdAt, mergedAt, closedAt, headRefName, baseRefName, ai: {claude, codex} | null }]
-// commits: { "owner/repo": count } for the last 30 days; reviews: { last30, prev30 }; open: [{ repo, createdAt, ... }]
-export function buildStats({ prs, commits, reviews, open, now, weeks = 12 }) {
-  const work = dedupe(prs).filter((pr) => !isPromotion(pr));
+// commits / commitsThisWeek: { "owner/repo": count } for each window; reviews: { last30, prev30 }; open: [{ repo, createdAt, ... }]
+export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, weeks = 12 }) {
+  const work = dedupe(prs).filter((pr) => !isPromotion(pr) && !isClaudeCloudPr(pr));
   const merged = work.filter((pr) => pr.mergedAt);
   const starts = weekStarts(now, weeks);
   const thisWeek = starts[starts.length - 1];
@@ -79,7 +81,7 @@ export function buildStats({ prs, commits, reviews, open, now, weeks = 12 }) {
   const ai = { claude: 0, codex: 0, both: 0, none: 0, total: rated.length };
   for (const { ai: a } of rated) ai[a.claude && a.codex ? "both" : a.claude ? "claude" : a.codex ? "codex" : "none"]++;
 
-  const openPrs = (open ?? []).filter((pr) => !isPromotion(pr));
+  const openPrs = (open ?? []).filter((pr) => !isPromotion(pr) && !isClaudeCloudPr(pr));
   const oldest = openPrs.length ? Math.max(...openPrs.map((pr) => Math.floor((now - Date.parse(pr.createdAt)) / DAY))) : null;
 
   return {
@@ -94,6 +96,7 @@ export function buildStats({ prs, commits, reviews, open, now, weeks = 12 }) {
     oldestOpenDays: oldest,
     repos,
     commits30: Object.values(commits ?? {}).reduce((s, n) => s + n, 0),
+    commitsThisWeek: commitsThisWeek == null ? null : Object.values(commitsThisWeek).reduce((s, n) => s + n, 0),
     ai,
     reviews: reviews ?? { last30: 0, prev30: 0 },
     mergeRate: rate,

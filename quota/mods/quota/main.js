@@ -3,7 +3,7 @@
 import { visibleWindows } from "./quota-windows.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { runQuotaCommand } from "./quota-command.js";
+import { runQuotaCommand, copilotWindows } from "./quota-command.js";
 import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, spaces } from "herdr";
 
 const EVERY = 120000, STALE = 10 * 60000;
@@ -81,9 +81,7 @@ async function load(on = null) {
   if (r.code !== 0) throw new Error(`quota-axi failed: ${(r.stderr || "").trim().split("\n").pop() || `exit ${r.code}`}`);
   // An interactive shell can print a banner first; the report starts at the first brace.
   const data = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
-  return {
-    at: Date.now(),
-    providers: (data.providers ?? []).map(p => ({
+  const providers = (data.providers ?? []).map(p => ({
       id: p.provider, label: p.label ?? p.provider, plan: p.plan ?? null, status: p.state?.status ?? null,
       windows: (p.windows ?? []).map(w => ({
         id: w.id, label: w.label, kind: w.kind, shareOf: w.shareOf ?? null,
@@ -92,8 +90,10 @@ async function load(on = null) {
           : w.shareOf == null && Number.isFinite(w.percentRemaining) ? 100 - w.percentRemaining : null,
         resetsAt: w.resetsAt ?? null, windowSeconds: w.windowSeconds ?? null,
       })).filter(w => Number.isFinite(w.percentUsed)),
-    })),
-  };
+    }));
+  const copilot = on == null ? providers.find(p => p.id === "copilot" && !p.windows.length) : null;
+  if (copilot) copilot.windows = await copilotWindows(exec).catch(() => null) ?? [];
+  return { at: Date.now(), providers };
 }
 
 export default class Quota extends View {
@@ -159,7 +159,7 @@ export default class Quota extends View {
     // Narrow status bar: shorter bars and no window labels, then percents only, so every provider shows.
     const width = this.width ?? Infinity, need = list.reduce((n, p) => n + p.windows.filter(x => o.kinds[x.kind] ?? false).length, 0);
     const per = need ? (width - 24 - list.length * 46) / need : Infinity;
-    const barW = per >= 96 ? 34 : per >= 60 ? 20 : 0, labels = per >= 96;
+    const barW = per >= 96 ? 44 : per >= 60 ? 20 : 0, labels = per >= 96;
     const parts = [];
     list.forEach((p, i) => {
       if (i > 0) parts.push(div().w(1).h(12).flex_none().bg(t.border));
@@ -167,20 +167,20 @@ export default class Quota extends View {
       parts.push(h_flex().id(`q-${p.id}`).gap(labels ? 9 : 6).items_center().flex_none()
         .tooltip(windows.map(w => `${p.label} ${w.label}: ${percentText(w, o.remaining)}${w.resetsAt && Date.parse(w.resetsAt) > now ? `, resets in ${until(w.resetsAt, now)}` : ""}`).join("\n") || `${p.label}: not signed in`)
         .child(h_flex().gap(5).items_center()
-          .child(this.glyph(p, 12, t))
+          .child(this.glyph(p, 14, t))
           .when(o.names || !ICONS[p.id], el => el.child(div().text_color(signedIn(p) ? t.muted : t.dim).child(p.label))))
         .when(!signedIn(p), el => el.child(div().size(6).rounded(3).border_1().border_color(t.dim)))
         .children(windows.map(w => {
           const pc = pace(w, now);
           return h_flex().gap(5).items_center()
-            .when(labels, el => el.child(div().text_size(10).text_color(t.dim).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
-            .when(barW > 0, el => el.child(bar(w, barW, 4, now, t, o.remaining)))
-            .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.muted).child(`${Math.round(percent(w, o.remaining))}%`))
+            .when(labels, el => el.child(div().text_size(12).text_color(t.dim).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
+            .when(barW > 0, el => el.child(bar(w, barW, 6, now, t, o.remaining)))
+            .child(div().min_w(31).text_size(13).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.muted).child(`${Math.round(percent(w, o.remaining))}%`))
             .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(8).text_color(level(Math.max(60, w.percentUsed))).child("▲")));
         })));
     });
     return h_flex().id("quota").size_full().px(labels ? 12 : 8).gap(labels ? 11 : 7).items_center().justify_end().overflow_hidden()
-      .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted).cursor_pointer()
+      .bg(t.chrome).border_t(1).border_color(t.border).text_size(13).text_color(t.muted).cursor_pointer()
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       .tooltip(`Quota on ${on ?? "this computer"}`)
       .when(stale, el => el.opacity(0.6))

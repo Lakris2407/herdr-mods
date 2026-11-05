@@ -1,118 +1,282 @@
-// CPU, memory and GPU load in the status bar: a small live graph and a percent for each.
-// Follows the selected space's machine. macOS reads `iostat`, `vm_stat`, `sysctl` and `ioreg`;
-// Linux reads /proc and, inside a container, its cgroup limits (see load.js). None need root.
+// System: CPU, RAM and disk load as Task Manager shows them, always visible in the status bar. Click it for details.
+// The same mod draws the popup (props().popup). Samples stay in the instance, never in shared state.
 import { View, div } from "gpui-kit";
-import { h_flex } from "gpui-base";
-import { exec, theme, settings, spaces } from "herdr";
-import { readLoad } from "./load.js";
+import { h_flex, v_flex, TextView } from "gpui-base";
+import { exec, hc, theme, settings, props, agents, spaces, openOverlay, home, readTextFile } from "herdr";
+import {
+  liveArgs, livePath, SCAN, TOTAL_MEMORY, REMOTE_SCRIPT, STATUS, parseTypeperf, parseRemote, remoteSample, parseTotalMemory, summarize, meterLevel, meters,
+  memoryPct, htmlText, valuesLine, healthLine, agentLines, agentsInOrder, straysLine, workingLine, isCodex, parseScan, parseSubagents, analyze, size, age, gb, speed, outsideLine, rowText, popupText,
+} from "./logic.js";
 
-const EVERY = 3000, HISTORY = 12, WATCH = 500;
-// After a failed read the last numbers stay, dimmed; after this long they are dropped.
-const GIVE_UP = 60000;
+const TICK = 1500, REMOTE_EVERY = 2000, RESTART_GAP = 5000, SMOOTH = 2, SCAN_EVERY = 5 * 60000, TOTAL_RETRY = 60000, STALE = 10000;
+const FONT = "JetBrains Mono", TRACK = "#3b404a";
+const METER = 44, POPUP_WIDTH = 620, POPUP_LINE = 370;
 
-// Same scale as the quota bars: green, amber from 60%, orange from 80%, red from 92%.
-function level(pct) {
+function color(level) {
   const dark = settings().dark !== false;
-  const scale = dark ? ["#5ed49a", "#f2c14e", "#f59152", "#f2665c"] : ["#1f9d63", "#c98a0b", "#dd6b20", "#d64545"];
-  return scale[pct >= 92 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0];
+  return (dark ? ["#5ed49a", "#f2c14e", "#f2665c"] : ["#1f9d63", "#c98a0b", "#d64545"])[level];
 }
 
-// The selected space's machine, as the quota mod finds it: null locally, else its name.
-const currentMachine = () => spaces().find(s => s.active)?.machine ?? null;
+const COPIED_FOR = 1500;
 
-// The last HISTORY reads as thin columns, newest on the right, tallest at 100%.
-function graph(history, t) {
-  const cols = Array.from({ length: HISTORY }, (_, i) => history[history.length - HISTORY + i]);
-  return h_flex().h(12).gap(1).items_end().flex_none()
-    .children(cols.map(pct => div().w(2).rounded(1)
-      .h(pct === undefined ? 1 : Math.max(1, Math.round(pct / 100 * 12)))
-      .bg(pct === undefined ? t.border : level(pct)).opacity(pct === undefined ? 1 : 0.85)));
-}
+const activeMachine = () => spaces().find((s) => s.active)?.machine ?? null;
 
 export default class System extends View {
   init(_props, cx) {
-    this.machine = currentMachine();
-    this.reset();
-    this.refresh(cx);
-    cx.timer.every(EVERY, cx => this.refresh(cx));
-    // Switching spaces needs no exec to notice, so check often and read the new machine at once.
-    cx.timer.every(WATCH, cx => {
-      const m = currentMachine();
-      if (m === this.machine) return;
-      this.machine = m;
-      this.reset();
-      cx.notify();
-      this.refresh(cx);
-    });
+    this.pids = {};
+    this.procs = null; // the popup scans on its own: only a scan just now knows who still runs
+    this.scanning = false;
+    this.totalGB = null;
+    this.copied = false;
+    this.generation = 0;
+    this.remoteBusy = false;
+    this.remoteAt = 0;
+    this.previous = null;
+    if (props()?.popup) {
+      const s = props().snapshot ?? {};
+      this.sample = s.sample ?? null;
+      this.pids = { ...(s.pids ?? {}) };
+      this.totalGB = s.totalGB ?? null;
+      this.path = livePath(home());
+      this.machine = s.machine ?? null;
+      this.label = s.label ?? null;
+      if (this.machine != null) {
+        this.collectRemote(cx, Date.now());
+        cx.timer.every(TICK, (cx) => this.tickRemote(cx));
+        return;
+      }
+      this.rescan(cx);
+      this.read(cx);
+      cx.timer.every(TICK, (cx) => { if (!this.reading) this.read(cx); }); // reads the same file: no process of its own
+      return;
+    }
+    this.sample = null;
+    this.path = livePath(home());
+    this.machine = activeMachine();
+    this.label = null;
+    if (this.machine != null) this.findLabel(cx);
+    this.sampling = false;
+    this.reading = false;
+    this.startedAt = 0;
+    this.tail = null;
+    this.shown = "";
+    this.scannedAt = 0;
+    this.stale = false;
+    this.tick(cx);
+    cx.timer.every(TICK, (cx) => this.tick(cx));
   }
 
-  // One machine's graphs never mix with another's.
-  reset() {
-    this.history = { cpu: [], ram: [], gpu: [] };
-    this.last = null;
-    this.at = null;
-    this.error = null;
+  // A space on another machine shows that machine: nothing from the laptop stays on screen, and a late answer is dropped.
+  switchTo(on, cx) {
+    this.machine = on;
+    this.generation++;
+    this.sample = null;
+    this.previous = null;
+    this.tail = null;
+    this.remoteBusy = false;
+    this.label = null;
+    if (on != null) { this.findLabel(cx); this.collectRemote(cx, Date.now()); }
   }
 
-  refresh(cx) {
-    if (this.loading) return;
-    this.loading = true;
-    const machine = this.machine;
-    cx.spawn(async cx => {
+  findLabel(cx) {
+    const on = this.machine;
+    cx.spawn(async (cx) => {
       try {
-        const now = await readLoad(exec, machine);
-        // A late reply from the machine before a switch never replaces the new one's data.
-        if (machine !== this.machine) return;
-        this.last = now;
-        this.at = Date.now();
-        this.error = null;
-        for (const key of ["cpu", "ram", "gpu"]) {
-          if (!now[key]) continue;
-          this.history[key].push(now[key].pct);
-          if (this.history[key].length > HISTORY) this.history[key].shift();
-        }
-      } catch (e) {
-        if (machine !== this.machine) return;
-        this.error = String(e.message ?? e);
-        // A machine that has not answered for a while shows as unavailable, not as old numbers.
-        if (this.at && Date.now() - this.at > GIVE_UP) { this.history = { cpu: [], ram: [], gpu: [] }; this.last = null; }
-      }
-      finally {
-        this.loading = false;
-        cx.notify();
-        // Switched while this read ran: read the new machine now, not on the next tick.
-        if (machine !== this.machine) this.refresh(cx);
-      }
+        const r = await hc(["machine", "ls", "--json"]);
+        const found = JSON.parse(r.stdout).machines?.find((m) => m.name === on || m.id === on);
+        if (on === this.machine) { this.label = found?.host ?? on; cx.notify(); }
+      } catch (e) { console.log(`system label: ${e}`); }
     });
+  }
+
+  collectRemote(cx, now) {
+    const on = this.machine, generation = this.generation;
+    this.remoteBusy = true;
+    this.remoteAt = now;
+    cx.spawn(async (cx) => {
+      try {
+        const r = await exec("sh", ["-c", REMOTE_SCRIPT], { on });
+        const cur = r.code === 0 ? parseRemote(r.stdout) : null;
+        if (generation === this.generation && cur) {
+          if (cur.os !== "Linux") this.sample = null;
+          else { this.sample = remoteSample(this.previous, cur, Date.now()); this.previous = cur; }
+        }
+      } catch (e) { console.log(`system remote: ${e}`); } // the last good sample stays and ages
+      if (generation === this.generation) { this.remoteBusy = false; this.redrawIfChanged(cx); }
+    });
+  }
+
+  tickRemote(cx) {
+    try {
+      const now = Date.now();
+      if (!this.remoteBusy && now - this.remoteAt >= REMOTE_EVERY) this.collectRemote(cx, now);
+      this.redrawIfChanged(cx);
+    } catch (e) { console.log(`system remote tick: ${e}`); }
+  }
+
+  total() { return this.sample?.remoteTotalGB ?? this.totalGB; }
+
+  redrawIfChanged(cx) {
+    const key = [...meters(this.sample, this.total()).map((m) => m.text), this.isStale(Date.now())].join("|");
+    if (props()?.popup || key !== this.shown) { this.shown = key; cx.notify(); }
+  }
+
+  // typeperf writes the file; each tick only reads it, and redraws only when something on screen would change.
+  tick(cx) {
+    try {
+      if (this.machine != null) { this.tickRemote(cx); return; }
+      const now = Date.now();
+      if (!this.sampling && now - this.startedAt >= RESTART_GAP) this.collect(cx, now);
+      const scanDue = this.totalGB == null ? TOTAL_RETRY : SCAN_EVERY;
+      if (!this.scanning && now - this.scannedAt >= scanDue) { this.scannedAt = now; this.rescan(cx); }
+      if (!this.reading) this.read(cx);
+    } catch (e) { console.log(`system tick: ${e}`); }
+  }
+
+  isStale(now) { return !this.sample || now - this.sample.at > STALE; }
+
+  collect(cx, now) {
+    this.sampling = true;
+    this.startedAt = now;
+    cx.spawn(async () => {
+      try { await exec("typeperf", liveArgs(this.path)); }
+      catch (e) { console.log(`system sample: ${e}`); }
+      this.sampling = false;
+    });
+  }
+
+  read(cx) {
+    this.reading = true;
+    cx.spawn(async (cx) => {
+      try {
+        const text = await readTextFile(this.path);
+        const tail = text?.slice(-80) ?? null, rows = parseTypeperf(text); // an unchanged file is a stopped typeperf: the data ages
+        if (this.machine == null && rows.length && tail !== this.tail) { this.tail = tail; this.sample = summarize(rows.slice(-SMOOTH), Date.now()); }
+      } catch (e) { console.log(`system read: ${e}`); } // the last good sample stays
+      this.reading = false;
+      this.redrawIfChanged(cx);
+    });
+  }
+
+  rescan(cx) {
+    if (this.scanning) return;
+    this.scanning = true;
+    cx.spawn(async (cx) => {
+      try {
+        if (this.totalGB == null) {
+          const m = await exec("powershell", ["-NoProfile", "-NonInteractive", "-Command", TOTAL_MEMORY]).catch(() => null);
+          this.totalGB = parseTotalMemory(m?.stdout);
+        }
+        const live = agents().map((a) => a.address).filter((a) => !a.includes("/"));
+        const pids = {};
+        for (const address of live) {
+          if (this.pids[address] != null) { pids[address] = this.pids[address]; continue; }
+          const r = await hc(["get", address, "--json"]).catch(() => null);
+          try { const pid = JSON.parse(r?.stdout ?? "null")?.pid; if (Number.isInteger(pid)) pids[address] = pid; } catch {}
+        }
+        const r = await exec("powershell", ["-NoProfile", "-NonInteractive", "-Command", SCAN]);
+        const list = parseScan(r.stdout);
+        if (list) {
+          this.procs = analyze(list, pids, agents().filter(isCodex).map((a) => a.address), parseSubagents(r.stdout) ?? []);
+          // A terminal revived after a core restart keeps its address but not its pid: ask again next scan.
+          this.pids = Object.fromEntries(Object.entries(pids).filter(([a]) => this.procs.agentBytes[a] != null));
+        }
+      } catch (e) { console.log(`system scan: ${e}`); } // the last good scan stays
+      this.scanning = false;
+      cx.notify();
+    });
+  }
+
+  open() {
+    const remote = this.machine != null, lines = agents().length + (this.procs?.strays?.length ?? 0) + 1;
+    openOverlay({
+      mod: "system", kind: "popup", width: POPUP_WIDTH, height: remote ? 220 : Math.min(680, 300 + lines * 22),
+      props: { popup: true, snapshot: { sample: this.sample, pids: this.pids, totalGB: this.totalGB, machine: this.machine, label: this.label } },
+    });
+  }
+
+  copy(cx, text) {
+    cx.write_to_clipboard(text);
+    this.copied = true;
+    cx.notify();
+    cx.timer.after(COPIED_FOR, (cx) => { this.copied = false; cx.notify(); });
   }
 
   render(cx) {
-    const t = theme(), now = this.last, machine = this.machine;
-    // Narrow status bar: drop the graphs first, then the GPU, so CPU and RAM always show.
-    // A remote machine's name takes room, and a machine without a GPU needs less.
-    const label = machine ? 14 + machine.length * 7 : 0;
-    const w = (this.width ?? Infinity) - label, graphs = w >= (now && !now.gpu ? 210 : 300), gpu = w >= 170;
-    const where = machine ? `${machine} · ` : "";
-    // A failed read keeps the last numbers, dimmed, with the error and their age in the tooltip.
-    const stale = Boolean(this.error) && Boolean(now);
-    const age = stale ? `Not updated for ${Math.round((Date.now() - this.at) / 1000)} s (${this.error}) · ` : "";
-    const metric = (key, name) => {
-      const m = now?.[key];
-      if (now && !m) return null;
-      return h_flex().id(`sys-${key}`).gap(5).items_center().flex_none().tooltip(age + where + (m?.tip ?? name)).when(stale, el => el.opacity(0.45))
-        .child(div().text_size(10).text_color(t.dim).child(name))
-        .when(graphs, el => el.child(graph(this.history[key], t)))
-        .child(div().min_w(26).text_size(11).text_color(m && m.pct >= 60 ? level(m.pct) : t.muted).child(m ? `${Math.round(m.pct)}%` : "–"));
+    const t = theme();
+    try {
+      if (!props()?.popup && activeMachine() !== this.machine) this.switchTo(activeMachine(), cx);
+      return props()?.popup ? this.details(t) : this.row(t);
+    } catch (e) {
+      console.log(`system render: ${e}`);
+      return div().id("system-failed").size_full().px(10).flex().items_center().bg(t.chrome).border_t(1).border_color(t.border)
+        .text_size(11.5).text_color(t.dim).child("System unavailable");
+    }
+  }
+
+  bar(t, width, height, pct, fill) {
+    return div().relative().w(width).h(height).flex_none().rounded(2).overflow_hidden().bg(settings().dark !== false ? TRACK : t.border)
+      .when(pct != null, (el) => el.child(div().absolute().left(0).top(0).h(height).w((width * pct) / 100).bg(fill)));
+  }
+
+  meter(t, m, width) {
+    const fill = m.level == null ? t.dim : color(m.level);
+    return h_flex().flex_none().gap(5).items_center()
+      .child(div().flex_none().text_color(t.foreground).child(m.label))
+      .child(this.bar(t, width, 6, m.pct, fill))
+      .child(div().w(33).flex_none().whitespace_nowrap().text_right().text_color(fill).child(m.text));
+  }
+
+  row(t) {
+    const s = this.sample, now = Date.now(), stale = this.isStale(now);
+    const strays = this.procs?.strays?.length ?? 0;
+    const tip = [
+      !s ? "Measuring…" : "Click for details",
+      s && stale ? `Stale data, updated ${Math.round((now - s.at) / 1000)}s ago` : null,
+      strays ? `Stray processes: ${strays}` : null,
+    ].filter(Boolean).join("\n");
+    return h_flex().id("system").size_full().px(8).gap(14).items_center().overflow_hidden()
+      .bg(t.chrome).border_t(1).border_color(t.border).font_family(FONT).text_size(13).font_weight(500).cursor_pointer()
+      .tooltip(tip).when(stale, (el) => el.opacity(0.6)).on_click(() => this.open())
+      .on_mouse_down("right", (_e, cx) => this.copy(cx, rowText(s, this.total())))
+      .when(this.copied, (el) => el.child(div().flex_none().text_color(t.foreground).child("Copied")))
+      .when(!this.copied, (el) => el.children(meters(s, this.total()).map((m) => this.meter(t, m, METER))));
+  }
+
+  details(t) {
+    const s = this.sample, p = this.procs, now = Date.now();
+    const remote = this.machine != null, mem = s ? memoryPct(s, this.total()) : null;
+    const selectable = (id, lines, c = t.foreground) => v_flex().w_full().text_color(c)
+      .children(lines.map((x, i) => TextView.html(`system-${id}-${i}`, htmlText(x)).selectable(true)));
+    const resource = (name, pct, note) => {
+      const level = meterLevel(pct), fill = level == null ? t.dim : color(level);
+      return h_flex().gap(8).items_center().h(24)
+        .child(div().w(82).flex_none().truncate().child(name))
+        .child(div().w(82).flex_none().truncate().text_size(12).text_color(t.dim).child(note))
+        .child(this.bar(t, POPUP_LINE, 8, pct, fill))
+        .child(div().w(40).flex_none().whitespace_nowrap().text_right().text_color(fill).child(pct == null ? "—" : `${Math.round(pct)}%`));
     };
-    return h_flex().id("system").size_full().px(graphs ? 12 : 8).gap(graphs ? 12 : 8).items_center().justify_end().overflow_hidden()
-      .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted)
-      .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
-      // Activity Monitor only makes sense for this Mac.
-      .when(!machine, el => el.cursor_pointer().on_click(() => exec("open", ["-a", "Activity Monitor"]).catch(() => {})))
-      .when(Boolean(machine), el => el.child(div().id("sys-machine").flex_none().text_size(10).font_semibold().text_color(t.accent)
-        .tooltip(`Load on ${machine}, the selected space's machine`).child(machine)))
-      .when(Boolean(this.error) && !now, el => el.child(div().id("sys-error").text_color(t.dim).tooltip(where + this.error).child("System load unavailable")))
-      .when(!this.error || Boolean(now), el => el.children([metric("cpu", "CPU"), metric("ram", "RAM"), gpu && metric("gpu", "GPU")].filter(Boolean)))
-      .child(div().w(1).h(12).ml(2).flex_none().bg(t.border));
+    const heading = (text) => div().pt(7).text_size(12).text_color(t.dim).child(text);
+    const list = agentsInOrder(agents());
+    const text = () => popupText({ s, totalGB: this.total(), list, procs: p, label: remote ? this.label ?? this.machine : undefined });
+    return v_flex().id("system-details").w_full().p(11).gap(3).bg(t.popover).font_family(FONT).text_size(13).overflow_y_scrollbar()
+      .child(div().pb(2).text_size(15).font_weight(600).child(selectable("top", [remote ? this.label ?? this.machine : workingLine(list, p?.subagents, p?.clineRunning, p?.codexRuns)])))
+      .child(h_flex().pb(4).items_center().justify_between().text_size(12).text_color(t.dim)
+        .child(s ? `updated ${Math.round((now - s.at) / 1000)}s ago` : "Measuring…")
+        .child(div().id("system-copy").px(8).rounded(4).cursor_pointer().bg(t.border).text_color(t.foreground)
+          .on_click((_e, cx) => this.copy(cx, text())).child(this.copied ? "Copied" : "Copy")))
+      .when(Boolean(s), (el) => el
+        .child(resource("CPU", s.cpuNow, ""))
+        .child(resource("Memory", mem, `${gb(s.availableGB)} free`))
+        .child(resource("Disk", s.diskPct, speed(s.diskMBs)))
+        .child(resource(remote ? "Storage /" : "Storage C:", s.usedCPct, `${gb(s.freeCGB)} free`))
+        .when(!remote, (el) => el.child(resource("Storage D:", s.usedDPct, `${gb(s.freeDGB)} free`)))
+        .child(div().pt(3).text_size(12).child(selectable("values", remote ? [valuesLine(s, this.total())] : [valuesLine(s, this.total()), healthLine(s)], t.dim))))
+      .when(!remote, (el) => el
+        .child(heading("Agents"))
+        .child(selectable("agents", agentLines(list, p)))
+        .child(div().h(5))
+        .child(selectable("outside", [`Outside Herdr: ${p ? outsideLine(p) : "scanning…"}`], p ? t.foreground : t.muted))
+        .when(Boolean(straysLine(p)), (el) => el.child(selectable("strays", [straysLine(p)], color(1)))));
   }
 }
