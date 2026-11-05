@@ -8,50 +8,53 @@ Claude or Codex, PRs and commits per repo, reviews of other people's PRs, and me
 
 ## What you see
 
-- **Header** (42 px, 1 px `border` bottom): "Your stats" in semibold, "updated 4m ago", and a
-  bordered Refresh button (11 px, `hover` background), as in the runners panel.
-- **Readable text:** labels use `muted` and hints use `dim`, each lifted toward the foreground only
-  when a theme sets it below 6:1 (labels) or 4.5:1 (hints) on `raised` (`colors.js`). The good and
-  bad colors (`ansi2`, `ansi1`) get the same 4.5:1 floor.
-- **Tiles** (2 × 2, `raised`, 8 px radius, rows stretched to equal height). Every tile has the same
-  four slots: label, value, comparison, context.
-  - Merged this week: pace against your usual week (▲ 12% ahead of pace, • on pace, ▼ 15% under
-    pace), then "~149 by Sun · 665 commits". The tooltip names the usual week and last week.
-  - Merged · 30 days: ▲/▼ versus the prior 30, then the daily average.
-  - Time to merge: ▲/▼ versus the prior 30, where less is green; then "median · 30 days".
-  - Open PRs: the oldest in days, then its `repo#number` (full name on hover).
-  - Comparisons have one format: the glyph and amount in the verdict color, "vs prior 30" in the
-    hint color.
-- **PRs merged per week:** 12 bars in `accent`, older weeks at 75% opacity, this week labelled
-  "now", every value above its bar (1.2k past 999). This week's bar sits in a dashed `accent`
-  outline up to where the week is heading.
-- **This week, day by day:** Monday to Sunday with every value; a past day with no merges is a 2 px
-  hint-colored bar, a future day a 1 px `border` line.
-- **AI share:** the percent (rounded down) at the right of the title, "N of N merged PRs made with
-  AI" below it, one split bar with 2 px gaps (Claude `#d4704f`, Codex `#3f86e0`, Both as the two
-  colors half and half, No AI mark in the hint color) and a legend with counts, so color is never
-  the only label.
-- **By repo:** the top five repos by merged PRs, one bar each in `accent`, commits on hover, then
-  "N more repos · N PRs". The owner shows only when two listed repos share a name.
-- **Commits, reviews, merge rate:** rows for your commits (in how many repos, 30 days), reviews of
-  others' PRs (▲/▼ versus the prior 30) and merge rate ("N closed or merged · 90 days").
-- **Type scale:** 10 (chart labels), 11 (secondary), 12 (repo names), 13 (body and card titles),
-  22 (tile values). Numbers group thousands by hand, because the runtime's `toLocaleString` does not.
+- **Header** (42 px, 1 px `border` bottom): "Your stats" in semibold, one status ("updated 4m ago",
+  "Refreshing…", or "Couldn't refresh · numbers from 47m ago" in the warning color), and a bordered
+  Refresh button (11 px, `hover` background), as in the runners panel.
+- **Readable colors** (`colors.js`): each theme color is lifted toward the foreground only when a
+  theme sets it below its floor on `raised`. Labels 6:1; hints, good (`ansi2`), bad (`ansi1`) and
+  warning (`ansi3`) 4.5:1; bars, the AI colors and the focus ring 3:1, the floor for non-text marks.
+- **This week** (full width, `raised`, 8 px radius): "This week" with "N commits" at the right, the
+  count at 30 px with "PRs merged", the pace in words ("15% behind your usual pace", "On your usual
+  pace"), then "Heading for ~150 by Sunday · usual week 176" in the hint color, then Monday to
+  Sunday as bars with every value. Today's bar is lighter; future days draw nothing. The pace's
+  tooltip names the usual week, the usual count by now and last week.
+- **Open PRs:** the count at the right of the title, then "Oldest gavematch#3 open 181 days" as one
+  clickable row; "open N days" turns to the warning color at 14 days. "None open" when there are none.
+- **Last 12 weeks:** 12 bars in `accent`, this week lighter and labelled "now", every value above
+  its bar (1.2k past 999). This week's bar sits in a dashed outline up to where the week is heading,
+  and its label names that estimate ("~150").
+- **Last 30 days:** rows with the label and value on one line and the comparison under it: PRs
+  merged, median time to merge, reviews of others' PRs, your commits ("in 14 repos"), merge rate
+  ("of 831 PRs closed or merged"). Comparisons are words in the verdict color ("276 more",
+  "16m slower"), then "than the 30 days before" in the hint color; reviews stay neutral. Then "Made
+  with AI" with its percent (rounded down), one split bar with 2 px gaps (Claude `#d4704f`, Codex
+  `#3f86e0`, Both as the two colors half and half, No AI mark in the hint color) and a legend with
+  counts, so color is never the only label.
+- **By repo:** the top five repos by merged PRs, one bar each, commits on hover; each row opens your
+  PRs in that repo. "Show 9 more repos · 33 PRs" expands the list and "Show fewer repos" folds it.
+  The owner shows only when two listed repos share a name.
+- **Type scale:** 10 (chart labels), 11 (secondary), 12 (pace, repo names), 13 (body and card
+  titles), 30 (this week's count). Numbers group thousands by hand, because the runtime's
+  `toLocaleString` does not.
 
 ## How it behaves
 
 - Loads on open when the cached numbers are older than 30 minutes, checks every 5 minutes, and
-  reloads on Refresh or the `stats:refresh` key command (`herdr-app do stats.refresh`).
-- Only the computed numbers go into shared state `stats.v2` (`{ at, stats }`), no PR texts.
-- Errors (for example "Run gh auth login first", or how to install `gh` when it is missing) show in
-  `ansi1` above the last numbers. Numbers older than 30 minutes, after a failed reload, show at 60%
-  opacity, as in the quota mod.
+  reloads on Refresh, R, or the `stats:refresh` key command (`herdr-app do stats.refresh`).
+- Only the computed numbers go into shared state `stats.v3` (`{ at, stats }`), no PR texts.
+- Errors show as a sentence that says what to do (`plainError` in `stats.js`): how to install `gh`,
+  "Run gh auth login in a terminal, then refresh", the API limit, or no network. With numbers on
+  screen they show in the warning color and the numbers stay at full opacity.
+- `"focusable": true`: `pane.go` gives the panel the keyboard. Every clickable thing registers in
+  reading order while the panel renders; ↑/↓ move a 1 px accent ring, Enter or Space activates, R
+  refreshes, Escape or ← runs `pane.go` left. Clicks open `https://github.com/` pages with `open`.
 
 ## Built from
 
-- One mod, `mods/stats`, `mod.json` `{ "place": "none", "title": "Your stats" }`, shown as a
+- One mod, `mods/stats`, `mod.json` `{ "place": "none", "title": "Your stats", "focusable": true }`, shown as a
   block in the side panel stack (`panel-body`) of a cloned layout, with a button in a cloned tab bar.
-- `herdr` API: `exec` (`gh api graphql`), `readTextFile` and `appHome` (optional `stats.json`),
+- `herdr` API: `exec` (`gh api graphql`, `open`), `run` (`pane.go`), `readTextFile` and `appHome` (optional `stats.json`),
   `theme`, `shared` / `setShared`, `nextCommand`; elements `.tooltip`, `overflow_y_scrollbar`.
 - `stats.js` is pure (no `herdr` imports), so `node --test` covers the counting.
 - GitHub: per account, 13 weekly `search(type: ISSUE)` windows of `is:pr author:<login>` (search
@@ -71,6 +74,7 @@ Claude or Codex, PRs and commits per repo, reviews of other people's PRs, and me
 - `herdr-app check mods/stats` passes and `node --test` passes.
 - With `gh` logged in, the panel fills in within about 15 seconds and shows the same 30-day merged
   count as a GitHub search for `is:pr is:merged author:<you> merged:>=<30 days ago>` minus releases.
-- Refresh shows "Loading…" and then "updated just now".
-- On a Thursday the week tile reads "on pace", "ahead of pace" or "under pace", never a raw drop
-  against a whole week.
+- Refresh shows "Refreshing…" in the header and then "updated just now".
+- On a Thursday the week reads "On your usual pace" or "N% ahead of" / "behind your usual pace",
+  never a raw drop against a whole week, and never in red.
+- The oldest PR and every repo row open on GitHub, and the keyboard reaches each of them.

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { weekStart, weekStarts, isPromotion, median, buildStats, duration, delta, aiTools, num, compact } from "../mods/stats/stats.js";
+import { weekStart, weekStarts, isPromotion, median, buildStats, duration, change, plainError, TIME_WORDS, aiTools, num, compact } from "../mods/stats/stats.js";
 import { contrast, readable } from "../mods/stats/colors.js";
 
 const at = (s) => new Date(s).getTime();
@@ -90,17 +90,26 @@ test("AI share splits merged PRs into Claude, Codex, both and none", () => {
   assert.deepEqual(s.ai, { claude: 1, codex: 0, both: 1, none: 1, total: 3 });
 });
 
-test("duration and delta format for tiles", () => {
+test("duration formats for tiles; change says the comparison in words", () => {
   assert.equal(duration(0.25), "15m");
   assert.equal(duration(1.16), "1.2h");
   assert.equal(duration(72), "3d");
   assert.equal(duration(null), "—");
-  assert.deepEqual(delta(5, 3), { d: 2, text: "+2" });
-  assert.deepEqual(delta(3, 5), { d: -2, text: "−2" });
-  assert.equal(delta(3, 3).text, "same");
-  assert.equal(delta(4430, 1200).text, "+3,230");
-  assert.equal(delta(1.4, 1.7, duration).text, "−18m");
-  assert.equal(delta(3, null), null);
+  assert.deepEqual(change(5, 3), { d: 2, text: "2 more" });
+  assert.deepEqual(change(3, 5), { d: -2, text: "2 fewer" });
+  assert.equal(change(3, 3).text, "same");
+  assert.equal(change(4430, 1200).text, "3,230 more");
+  assert.equal(change(1.4, 1.7, { format: duration, words: TIME_WORDS }).text, "18m faster");
+  assert.equal(change(1.7, 1.4, { format: duration, words: TIME_WORDS }).text, "18m slower");
+  assert.equal(change(3, null), null);
+});
+
+test("plainError turns raw GitHub errors into what to do next", () => {
+  assert.match(plainError("API rate limit exceeded for user ID 1."), /limit is used up/);
+  assert.match(plainError("Post \"https://api.github.com/graphql\": dial tcp: lookup api.github.com: no such host... could not resolve"), /Couldn't reach GitHub/);
+  assert.equal(plainError("Run gh auth login in a terminal, then refresh"), "Run gh auth login in a terminal, then refresh");
+  assert.equal(plainError("Something odd"), "GitHub returned an error: Something odd");
+  assert.match(plainError(""), /Refresh to try again/);
 });
 
 test("num groups thousands by hand; compact shortens chart labels", () => {

@@ -65,8 +65,8 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
   const prev30 = merged.filter((pr) => between(pr.mergedAt, now - 60 * DAY, now - 30 * DAY));
   const hoursOf = (list) => list.map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.createdAt)) / 3600000);
 
-  // Decided in the last 90 days: merged, or closed without a merge.
-  const decided = work.filter((pr) => between(pr.mergedAt ?? pr.closedAt ?? "", now - 90 * DAY, now + 1));
+  // Decided in the last 30 days, the window of every other number in its card: merged, or closed without a merge.
+  const decided = work.filter((pr) => between(pr.mergedAt ?? pr.closedAt ?? "", now - 30 * DAY, now + 1));
   const rate = decided.length ? Math.round(100 * decided.filter((pr) => pr.mergedAt).length / decided.length) : null;
 
   const byRepo = {};
@@ -154,10 +154,22 @@ export function duration(hours) {
   return `${(Math.round(hours / 2.4) / 10).toString()}d`;
 }
 
-// The change against a baseline: `d` for direction, `text` for the amount ("+3", "−2", "same").
-// The caller writes the baseline ("vs prior 30") in a quieter color.
-export function delta(now, before, format = num) {
+// The change against a baseline, in words, so the verdict never rests on color: "274 more", "9 fewer",
+// "17m slower", "same". `d` keeps the direction for the caller's tone.
+export const COUNT_WORDS = ["more", "fewer"], TIME_WORDS = ["slower", "faster"];
+export function change(now, before, { format = num, words = COUNT_WORDS } = {}) {
   if (before == null || now == null) return null;
   const d = now - before;
-  return { d, text: d === 0 ? "same" : `${d > 0 ? "+" : "−"}${format(Math.abs(d))}` };
+  return { d, text: d === 0 ? "same" : `${format(Math.abs(d))} ${d > 0 ? words[0] : words[1]}` };
+}
+
+// What went wrong, as a sentence that says what to do. `gh` and our own messages pass through; GitHub's
+// raw API errors get a plain sentence first.
+export function plainError(message) {
+  const m = String(message ?? "").trim();
+  if (/rate limit/i.test(m)) return "GitHub's API limit is used up for now. Refresh again in a few minutes.";
+  if (/could not resolve|connection|timed? ?out|network|EOF|ENOTFOUND|ECONNRESET/i.test(m))
+    return "Couldn't reach GitHub. Check the network, then refresh.";
+  if (/^gh is not installed|^Run gh auth login|is not valid JSON$/.test(m)) return m;
+  return m ? `GitHub returned an error: ${m}` : "Couldn't load your numbers. Refresh to try again.";
 }
