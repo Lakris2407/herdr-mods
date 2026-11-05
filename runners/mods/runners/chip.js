@@ -3,6 +3,7 @@
 import { div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { theme, openOverlay, layout, run, settings } from "herdr";
+import { readable } from "./colors.js";
 import { snapshot } from "./poll.js";
 import { slots, summary, waiting, running } from "./model.js";
 import { squares, colors } from "./ui.js";
@@ -19,7 +20,24 @@ function find(node, id) {
 }
 
 export class Chip {
-  init() {}
+  init(_props, cx) {
+    this.handle = cx.focus_handle();
+  }
+
+  // pane.go can land on the chip too: Enter does what a click does, Space what a right-click does.
+  focus() {
+    this.handle.focus();
+  }
+
+  key(e, cx) {
+    const k = e.keystroke;
+    if (k === "enter") this.toggle();
+    else if (k === "space") this.open();
+    else if (k === "escape") run("pane.go", { direction: "up" });
+    else if (["up", "left", "right"].includes(k)) run("pane.go", { direction: k });
+    else return;
+    cx.stop_propagation();
+  }
 
   open() {
     const s = snapshot();
@@ -39,7 +57,10 @@ export class Chip {
     const bar = h_flex().id("runners-chip").size_full().px(10).gap(8).overflow_hidden().items_center().cursor_pointer()
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.8).text_color(t.muted)
       .hover((e) => e.bg(t.hover)).on_click(() => this.toggle()).on_mouse_down("right", () => this.open())
-      .tooltip("Runners · click: panel · right-click: quick look");
+      .tooltip("Runners · click: panel · right-click: quick look")
+      .role("button").accessibility_label("Runners: Enter shows the panel, Space a quick look")
+      .track_focus(this.handle).on_key_down((e, cx) => this.key(e, cx))
+      .when(this.handle.is_focused(), (e) => e.border_2().border_color(readable(t.accent, t.chrome, 3)));
     if (!s) return bar.child("Runners").child(svg("mods/workspace-chrome/spinner.svg").size(12).spin(900));
     const sum = summary(s), offline = slots(s).some((r) => r.status === "offline");
     // Narrow status bar: drop the title, then the squares, so the counts always show.

@@ -129,3 +129,24 @@ test("readable text on a theme fill with alpha reaches the floor", async () => {
   assert.ok(contrast(readable("#9fa0a5", fill, 4.5), fill) >= 4.5);
   assert.equal(flatten("#282a36", "#000000"), "#282a36");
 });
+
+test("the keyboard cursor follows its item, and takes the next one when it leaves", async () => {
+  const { step, current } = await import("../mods/runners/keys.js");
+  assert.deepEqual(step(["a", "b", "c"], null, 0, 1), { cur: "a", last: 0 });
+  assert.deepEqual(step(["a", "b", "c"], "c", 2, 1), { cur: "a", last: 0 });
+  assert.deepEqual(step(["a", "b", "c"], "a", 0, -1), { cur: "c", last: 2 });
+  // "b" finished and left: the cursor takes what now sits in its place.
+  assert.equal(current(["a", "c"], "b", 1), "c");
+  assert.equal(current(["a"], "b", 1), "a");
+  assert.equal(current([], "b", 1), null);
+  assert.deepEqual(step([], "a", 0, 1), { cur: null, last: 0 });
+});
+
+test("Escape leaves the panel toward the terminals", async () => {
+  const { leaveSide } = await import("../mods/runners/keys.js");
+  const panel = { id: "runners", content: { mod: "runners" } }, chip = { content: { mod: "runners", props: { view: "chip" } } };
+  const terms = { content: { tab: 0 } };
+  assert.equal(leaveSide({ type: "row", children: [terms, { type: "column", children: [panel] }] }, "runners"), "left");
+  assert.equal(leaveSide({ type: "row", children: [{ type: "column", children: [chip, panel] }, terms] }, "runners"), "right");
+  assert.equal(leaveSide({ type: "column", children: [chip] }, "runners"), "left");
+});
