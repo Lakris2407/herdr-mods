@@ -68,6 +68,8 @@ test("GitHub jobs, runner status, lanes and ssh load make one snapshot", async (
   // ubuntu-latest is not watched; the self-hosted queued job and the lanes caller are.
   assert.deepEqual(model.waiting(s).map((j) => j.short).sort(), ["GAME", "WEB"]);
   assert.equal(model.running(s).length, 2);
+  // Each GitHub job knows its run, so Finished can put a run's jobs in one row.
+  assert.ok(s.jobs.filter((j) => j.short === "WEB").every((j) => j.run === 7));
 });
 
 test("lanes status and history parse into jobs", () => {
@@ -149,4 +151,27 @@ test("Escape leaves the panel toward the terminals", async () => {
   assert.equal(leaveSide({ type: "row", children: [terms, { type: "column", children: [panel] }] }, "runners"), "left");
   assert.equal(leaveSide({ type: "row", children: [{ type: "column", children: [chip, panel] }, terms] }, "runners"), "right");
   assert.equal(leaveSide({ type: "column", children: [chip] }, "runners"), "left");
+});
+
+test("data with no new read for 3 minutes is stale, even when no read failed", () => {
+  assert.deepEqual(model.freshness({ at: now - 2 * MIN }, now), { text: "updated 2m ago", stale: false });
+  assert.equal(model.freshness({ at: now - 4 * MIN }, now).stale, true);
+  assert.equal(model.freshness({ at: now - MIN, errorAt: now }, now).stale, true);
+  assert.equal(model.freshness(null, now).stale, false);
+});
+
+test("the banner names offline slots first, then machines ssh can't read", () => {
+  const s = { machines: [
+    { name: "A", loadError: "timed out", runners: [{ name: "a1", status: "online" }] },
+    { name: "B", loadError: null, runners: [{ name: "b1", status: "offline" }, { name: "b2", status: "unknown" }] },
+  ] };
+  assert.deepEqual(model.problems(s), { off: 1, list: ["b1 offline", "A: ssh failed"] });
+  assert.deepEqual(model.problems({ machines: [{ name: "C", runners: [{ name: "c", status: "online" }] }] }), { off: 0, list: [] });
+});
+
+test("finished jobs of one run with one outcome share a row; lanes jobs stay single", () => {
+  const J = (id, run, conclusion = "success") => ({ id, run, repo: "o/w", conclusion });
+  const rows = model.byRun([J(1, 9), J(2, 9), J(3, 9, "cancelled"), J(4, undefined), J(5, 9), J(6, 8)]);
+  assert.deepEqual(rows.map((r) => r.jobs.map((j) => j.id)), [[1, 2, 5], [3], [4], [6]]);
+  assert.deepEqual(rows.map((r) => r.key), ["o/w#9:success", "o/w#9:cancelled", "job-4", "o/w#8:success"]);
 });

@@ -17,10 +17,14 @@ slots, the lanes of a lock-based job script, and each machine's load over ssh.
   Refresh. Groups `WAITING · n` (time waited in `ansi3`), `RUNNING · n` (elapsed / usual, a 3 px
   bar, amber past 1.2x usual), `MACHINES` (dot, `busy of slots`, 60 px load bar, `load x / cores`),
   at most 6 rows each. Footer: Open panel, Timeline.
-- **Panel**: header with Timeline and Refresh; tiles for waiting (with the longest wait), slots
-  busy, and today's median wait; a card per machine (load bar, optional `warm:` text, a 15 px bar
-  per slot naming its job, a hot border at load per core >= 0.9); Waiting; Finished with the 5
-  latest of the last hour and Show more. Without a config: a Set up card.
+- **Panel**: header with Timeline and Refresh (`updated Ns ago`, amber after a failed read or 3 min
+  without one); a banner only when a slot is offline (`ansi1`) or ssh fails (`ansi3`), naming
+  each; tiles for waiting, failed in the last hour, slots busy and today's median wait; Waiting
+  (only when some wait); Running (elapsed / usual, a 3 px bar, amber past 1.2x usual); a card per
+  machine (load bar, optional `warm:` text, a 17 px bar per slot naming its job, a dashed empty bar
+  and one `No status: needs repo admin` line for slots without status, a hot border at load per core >= 0.9);
+  Finished: failures first, passed jobs of one GitHub run in one row, the 5 latest rows and Show N
+  older. Every card and machine uses p 10 and radius 8. Without a config: a Set up card.
 - **Timeline** (window 940 px, key `runners-lanes`): axis -30m to +10m, a 24 px lane per slot, grid
   every 5 min, an `accent` now line. Passed = `surface` with a 2 px `ansi2` left edge, failed the
   same in `ansi1`, running = `accent`, the usual rest = `accent` at 30%, waiting = dashed `ansi3`
@@ -55,6 +59,6 @@ plan of expected starts), `ui.js`, `chip.js`, `popup.js`, `panel.js`, `lanes.js`
 ## Done when
 
 `npm test` passes; `herdr-app check` passes; with `{ "demo": true }` the chip shows 8 squares and
-`2 waiting`, the panel shows 2 machines, 2 waiting and 11 finished jobs, and the timeline places
+`2 waiting`, the panel shows 2 waiting, 3 running, 2 machines and 5 finished rows (2 failed, one `CI · 3 jobs`), and the timeline places
 both waiting jobs; clicking the chip twice shows and hides the panel; the timeline's Close button
 closes it.

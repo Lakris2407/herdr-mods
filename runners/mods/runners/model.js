@@ -1,6 +1,8 @@
 // What the views show, from a snapshot: pure functions, no herdr calls.
 
 const MIN = 60000, GUESS = 5 * MIN;
+// Past this with no new read (the app slept, or no view polled), the data is old even though no read failed.
+const STALE = 3 * MIN;
 
 export const jobKey = (j) => j.key ?? `${j.repo}:${j.workflow}:${j.name}`;
 
@@ -46,6 +48,34 @@ export function ago(at, now) {
   if (sec < 60) return `${sec}s ago`;
   const min = Math.round(sec / 60);
   return min < 60 ? `${min}m ago` : `${Math.round(min / 60)}h ago`;
+}
+
+// How old the data is. A failed read keeps the time of the last good data, so the header never says "just now" over old jobs.
+export function freshness(s, now) {
+  if (!s) return { text: "Loading…", stale: false };
+  if (s.errorAt) return { text: s.at ? `data from ${ago(s.at, now)} · last read failed` : "could not read the runners", stale: true };
+  return { text: `updated ${ago(s.at, now)}`, stale: s.at != null && now - s.at > STALE };
+}
+
+// What needs a look on the machines, for the panel's banner: slots offline, then machines ssh can't read.
+export function problems(s) {
+  const off = s.machines.flatMap((m) => m.runners.filter((r) => r.status === "offline").map((r) => `${r.name} offline`));
+  const ssh = s.machines.filter((m) => m.loadError).map((m) => `${m.name}: ssh failed`);
+  return { off: off.length, list: [...off, ...ssh] };
+}
+
+// Finished jobs of one GitHub run with one outcome make one row; lanes jobs have no run and stay single.
+// The list comes newest first, so a row's first job is its latest.
+export function byRun(list) {
+  const rows = [], at = new Map();
+  for (const j of list) {
+    const k = j.run != null ? `${j.repo}#${j.run}:${j.conclusion}` : null;
+    if (k && at.has(k)) { at.get(k).jobs.push(j); continue; }
+    const row = { key: k ?? `job-${j.id}`, jobs: [j] };
+    rows.push(row);
+    if (k) at.set(k, row);
+  }
+  return rows;
 }
 
 // Load per core, 0..1+: a machine at 8 on 8 cores is full.

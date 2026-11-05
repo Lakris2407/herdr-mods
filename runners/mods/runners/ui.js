@@ -2,7 +2,7 @@
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, exec, openOverlay } from "herdr";
-import { label, duration, pressure, jobKey, ago } from "./model.js";
+import { label, duration, pressure, jobKey } from "./model.js";
 import { snapshot } from "./poll.js";
 import { readable, contrast, flatten } from "./colors.js";
 
@@ -22,12 +22,8 @@ export const onFill = (fill, t) => {
   return (contrast(t.background, f) ?? 0) >= (contrast(t.foreground, f) ?? 0) ? t.background : t.foreground;
 };
 
-// How old the data is. A failed read keeps the time of the last good data, so the header never says "just now" over old jobs.
-export function freshness(s, now) {
-  if (!s) return { text: "Loading…", stale: false };
-  if (s.errorAt) return { text: s.at ? `data from ${ago(s.at, now)} · last read failed` : "could not read the runners", stale: true };
-  return { text: `updated ${ago(s.at, now)}`, stale: false };
-}
+// How old the data is lives with the other pure rules; every view reads it from here.
+export { freshness } from "./model.js";
 
 // The timeline is a window you open, never part of the layout.
 export function openLanes() {
@@ -81,8 +77,8 @@ export function loadText(m) {
 }
 
 // One job: repo tag, what and where, and a time on the right. `bar` adds progress against the usual length.
-// `tag: false` drops the repo tag, for a setup that watches one repo.
-export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true }, t) {
+// `tag: false` drops the repo tag, for a setup that watches one repo; `title` replaces the job's label.
+export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true, title }, t) {
   const usual = typical?.[jobKey(j)];
   const pct = j.started && usual ? Math.min(1, (now - j.started) / usual) : null;
   // Past 1.2x its usual length, the bar turns amber: this run is slow, not almost done.
@@ -91,7 +87,7 @@ export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true
     .hover((e) => e.bg(t.hover)).on_click(() => openJob(j)).tooltip(j.url ? `${j.repo} · open on GitHub` : `${j.repo} · ${j.worktree} · open its logs`)
     .when(tag, (e) => e.child(repoTag(j, t)))
     .child(v_flex().flex_1().min_w(0).gap(2)
-      .child(div().truncate().text_color(t.foreground).child(label(j)))
+      .child(div().truncate().text_color(t.foreground).child(title ?? label(j)))
       .child(div().truncate().text_size(11).text_color(ink(t).sub).child(sub))
       .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(ink(t).track).overflow_hidden()
         .child(div().h_full().bg(slow ? t.ansi3 : t.accent).w(`${Math.round(pct * 100)}%`)))))
