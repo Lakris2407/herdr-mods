@@ -1,11 +1,11 @@
 // Agent quota in the status bar: one slim bar per limit window, from `quota-axi --json`.
 // Click it for details and options. The same mod draws the popup (props().menu).
 import { visibleWindows } from "./quota-windows.js";
-import { roles, level } from "./colors.js";
+import { roles, level, readable } from "./colors.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { runQuotaCommand, copilotWindows } from "./quota-command.js";
-import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, spaces } from "herdr";
+import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, spaces, run } from "herdr";
 
 const EVERY = 120000, STALE = 10 * 60000;
 const DEFAULTS = { kinds: { session: true, weekly: true, monthly: true, model: false }, hidden: [], signedOut: false, names: false, remaining: false };
@@ -103,6 +103,7 @@ export default class Quota extends View {
       cx.notify();
     });
     if (props()?.menu) return;
+    this.handle = cx.focus_handle();
     this.machine = quotaMachine();
     this.refresh(cx);
     cx.timer.every(EVERY, cx => this.refresh(cx));
@@ -114,6 +115,18 @@ export default class Quota extends View {
         if (c === "refresh") this.refresh(cx);
       }
     });
+  }
+
+  // pane.go can land here, as on the runners chip: Enter or Space does what a click does.
+  focus() { this.handle?.focus(); }
+
+  key(e, cx, act) {
+    const k = e.keystroke;
+    if (k === "enter" || k === "space") act();
+    else if (k === "escape") run("pane.go", { direction: "up" });
+    else if (["up", "left", "right"].includes(k)) run("pane.go", { direction: k });
+    else return;
+    cx.stop_propagation();
   }
 
   glyph(p, size, t) {
@@ -157,10 +170,11 @@ export default class Quota extends View {
     const width = this.width ?? Infinity, need = list.reduce((n, p) => n + p.windows.filter(x => o.kinds[x.kind] ?? false).length, 0);
     const per = need ? (width - 24 - list.length * 46) / need : Infinity;
     const barW = per >= 96 ? 34 : per >= 60 ? 20 : 0, labels = per >= 96;
-    const parts = [];
+    const parts = [], spoken = [];
     list.forEach((p, i) => {
       if (i > 0) parts.push(div().w(1).h(12).flex_none().bg(t.border));
       const windows = visibleWindows(p, o).filter(w => o.kinds[w.kind] ?? false);
+      spoken.push(windows.length ? `${p.label} ${windows.map(w => `${w.label} ${percentText(w, o.remaining)}`).join(", ")}` : `${p.label} not signed in`);
       parts.push(h_flex().id(`q-${p.id}`).gap(labels ? 9 : 6).items_center().flex_none()
         .tooltip(windows.map(w => `${p.label} ${w.label}: ${percentText(w, o.remaining)}${w.resetsAt && Date.parse(w.resetsAt) > now ? `, resets in ${until(w.resetsAt, now)}` : ""}`).join("\n") || `${p.label}: not signed in`)
         .child(h_flex().gap(5).items_center()
@@ -180,6 +194,9 @@ export default class Quota extends View {
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(r.sub).cursor_pointer()
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       .tooltip(`Quota on ${on ?? "this computer"}`)
+      .role("button").accessibility_label(`Agent quota on ${on ?? "this computer"}: ${spoken.join("; ") || "nothing to show"}. Enter opens details.`)
+      .track_focus(this.handle).on_key_down((e, cx) => this.key(e, cx, () => this.openMenu()))
+      .when(this.handle.is_focused(), el => el.border_2().border_color(readable(t.accent, t.chrome, 3)))
       .when(stale, el => el.opacity(0.6))
       .on_click(() => this.openMenu())
       .on_mouse_down("right", () => this.openMenu())

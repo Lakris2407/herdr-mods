@@ -3,9 +3,9 @@
 // Linux reads /proc and, inside a container, its cgroup limits (see load.js). None need root.
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { exec, theme, settings, spaces } from "herdr";
+import { exec, theme, settings, spaces, run } from "herdr";
 import { readLoad, sustained } from "./load.js";
-import { roles, level } from "./colors.js";
+import { roles, level, readable } from "./colors.js";
 
 const EVERY = 3000, HISTORY = 12, WATCH = 500;
 // After a failed read the last numbers stay, dimmed; after this long they are dropped.
@@ -14,6 +14,7 @@ const GIVE_UP = 60000;
 // Calm unless it stays high: the numbers and graphs are quiet, and a metric takes the quota bars'
 // scale (colors.js) only after about 30 s at 80% or more. It stops at orange: a busy machine is not a
 // failure, and red stays for what needs you.
+const monitor = () => exec("open", ["-a", "Activity Monitor"]).catch(() => {});
 const tone = (history, pct, r) => sustained(history) ? level(pct, r, { cap: "hot" }) : null;
 
 // The selected space's machine, as the quota mod finds it: null locally, else its name.
@@ -31,6 +32,7 @@ function graph(history, r, color) {
 
 export default class System extends View {
   init(_props, cx) {
+    this.handle = cx.focus_handle();
     this.machine = currentMachine();
     this.reset();
     this.refresh(cx);
@@ -44,6 +46,18 @@ export default class System extends View {
       cx.notify();
       this.refresh(cx);
     });
+  }
+
+  // pane.go can land here, as on the runners chip: Enter or Space does what a click does.
+  focus() { this.handle?.focus(); }
+
+  key(e, cx, act) {
+    const k = e.keystroke;
+    if (k === "enter" || k === "space") act();
+    else if (k === "escape") run("pane.go", { direction: "up" });
+    else if (["up", "left", "right"].includes(k)) run("pane.go", { direction: k });
+    else return;
+    cx.stop_propagation();
   }
 
   // One machine's graphs never mix with another's.
@@ -96,6 +110,7 @@ export default class System extends View {
     // A failed read keeps the last numbers, dimmed, with the error and their age in the tooltip.
     const stale = Boolean(this.error) && Boolean(now);
     const age = stale ? `Not updated for ${Math.round((Date.now() - this.at) / 1000)} s (${this.error}) · ` : "";
+    const spoken = now ? ["cpu", "ram", "gpu"].filter(k => now[k]).map(k => `${k.toUpperCase()} ${Math.round(now[k].pct)}%`).join(", ") : "";
     const metric = (key, name) => {
       const m = now?.[key];
       if (now && !m) return null;
@@ -110,7 +125,10 @@ export default class System extends View {
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(r.sub)
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       // Activity Monitor only makes sense for this Mac.
-      .when(!machine, el => el.cursor_pointer().on_click(() => exec("open", ["-a", "Activity Monitor"]).catch(() => {})))
+      .when(!machine, el => el.cursor_pointer().on_click(() => monitor()).role("button"))
+      .accessibility_label(`System load on ${machine ?? "this computer"}: ${spoken || "unavailable"}.${machine ? "" : " Enter opens Activity Monitor."}`)
+      .track_focus(this.handle).on_key_down((e, cx) => this.key(e, cx, () => { if (!machine) monitor(); }))
+      .when(this.handle.is_focused(), el => el.border_2().border_color(readable(t.accent, t.chrome, 3)))
       .when(Boolean(machine), el => el.child(div().id("sys-machine").flex_none().text_size(10).font_semibold().text_color(t.accent)
         .tooltip(`Load on ${machine}, the selected space's machine`).child(machine)))
       .when(Boolean(this.error) && !now, el => el.child(div().id("sys-error").text_color(r.hint).tooltip(where + this.error).child("System load unavailable")))

@@ -75,6 +75,8 @@ export class Chip {
       .when(full || (!squaresFit && !offline), (e) => e.child("Runners"))
       .when(squaresFit, (e) => e.child(h_flex().gap(5).items_center().children(groups))).child(state)
       .when(offline, (e) => e.child(div().text_color(c.off).child("offline")))
-      .when(Boolean(s.error), (e) => e.child(div().text_color(c.off).child("!")));
+      // A failed read says so in words when there is room; the tooltip names what failed.
+      .when(Boolean(s.error), (e) => e.child(div().id("chip-error").text_color(c.off).tooltip(`Last read failed: ${s.error}`)
+        .child(squaresFit ? "read failed" : "!")));
   }
 }
