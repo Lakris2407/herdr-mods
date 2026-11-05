@@ -166,10 +166,11 @@ export default class Quota extends View {
     const data = shared(stateKey("quota.data")), error = shared(stateKey("quota.error")), o = options(), now = Date.now();
     const stale = !data || now - data.at > STALE;
     const list = (data?.providers ?? []).filter(p => !o.hidden.includes(p.id) && (signedIn(p) || o.signedOut));
-    // Narrow status bar: shorter bars and no window labels, then percents only, so every provider shows.
+    // Narrow status bar: shorter bars, then no bars, then percents only, so every provider shows.
+    // The window label goes last: "25%" alone does not say which limit it is.
     const width = this.width ?? Infinity, need = list.reduce((n, p) => n + p.windows.filter(x => o.kinds[x.kind] ?? false).length, 0);
     const per = need ? (width - 24 - list.length * 46) / need : Infinity;
-    const barW = per >= 96 ? 34 : per >= 60 ? 20 : 0, labels = per >= 96;
+    const barW = per >= 96 ? 34 : per >= 76 ? 20 : 0, labels = per >= 52;
     const parts = [], spoken = [];
     list.forEach((p, i) => {
       if (i > 0) parts.push(div().w(1).h(12).flex_none().bg(t.border));
