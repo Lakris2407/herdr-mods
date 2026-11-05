@@ -6,7 +6,7 @@ import { theme, openOverlay, layout, run, settings } from "herdr";
 import { readable } from "./colors.js";
 import { snapshot } from "./poll.js";
 import { slots, summary, waiting, running } from "./model.js";
-import { squares, colors } from "./ui.js";
+import { squares, colors, ink } from "./ui.js";
 
 const ROW = 30;
 
@@ -53,7 +53,7 @@ export class Chip {
   }
 
   render() {
-    const t = theme(), s = snapshot(), c = colors(t);
+    const t = theme(), s = snapshot(), c = colors(t, t.chrome);
     const bar = h_flex().id("runners-chip").size_full().px(10).gap(8).overflow_hidden().items_center().cursor_pointer()
       .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.8).text_color(t.muted)
       .hover((e) => e.bg(t.hover)).on_click(() => this.toggle()).on_mouse_down("right", () => this.open())
@@ -70,7 +70,7 @@ export class Chip {
     const full = w >= 170 + need, squaresFit = w >= 110 + need;
     const state = sum.waiting
       ? div().text_color(c.wait).child(squaresFit ? `${sum.waiting} waiting` : `${sum.busy}/${sum.total} · ${sum.waiting} waiting`)
-      : sum.busy ? div().child(squaresFit ? `${sum.busy} running` : `${sum.busy}/${sum.total} running`) : div().text_color(t.dim).child("idle");
+      : sum.busy ? div().child(squaresFit ? `${sum.busy} running` : `${sum.busy}/${sum.total} running`) : div().text_color(ink(t, t.chrome).hint).child("idle");
     return bar.on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       .when(full || (!squaresFit && !offline), (e) => e.child("Runners"))
       .when(squaresFit, (e) => e.child(h_flex().gap(5).items_center().children(groups))).child(state)

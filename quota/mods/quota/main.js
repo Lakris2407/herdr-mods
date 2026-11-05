@@ -1,6 +1,7 @@
 // Agent quota in the status bar: one slim bar per limit window, from `quota-axi --json`.
 // Click it for details and options. The same mod draws the popup (props().menu).
 import { visibleWindows } from "./quota-windows.js";
+import { roles, level } from "./colors.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { runQuotaCommand, copilotWindows } from "./quota-command.js";
@@ -21,13 +22,6 @@ const setOptions = change => setShared("quota.options", { ...options(), ...chang
 const signedIn = p => p.windows.length > 0;
 const quotaMachine = () => props()?.menu ? props().machine ?? null : spaces().find(s => s.active)?.machine ?? null;
 const stateKey = (name, on = quotaMachine()) => `${name}:${JSON.stringify(on)}`;
-
-// Calm until it matters: green, amber from 60%, orange from 80%, red from 92%.
-function level(pct) {
-  const dark = settings().dark !== false;
-  const scale = dark ? ["#5ed49a", "#f2c14e", "#f59152", "#f2665c"] : ["#1f9d63", "#c98a0b", "#dd6b20", "#d64545"];
-  return scale[pct >= 92 ? 3 : pct >= 80 ? 2 : pct >= 60 ? 1 : 0];
-}
 
 // Two windows of one kind (Cursor's monthly ones) are told apart by their own label.
 function short(w, twin) {
@@ -67,10 +61,11 @@ function pace(w, now) {
 const percent = (w, remaining) => remaining && !w.shareOf ? 100 - w.percentUsed : w.percentUsed;
 const percentText = (w, remaining) => `${Math.round(percent(w, remaining))}% ${remaining && !w.shareOf ? "remaining" : "used"}`;
 
-function bar(w, width, height, now, t, remaining) {
+// Calm until it matters (colors.js): green, amber from 60%, orange from 80%, red from 92%, when a limit is close.
+function bar(w, width, height, now, t, remaining, r) {
   const e = elapsed(w, now), pct = Math.min(100, Math.max(0, percent(w, remaining)));
-  return div().relative().w(width).h(height).flex_none().rounded(height / 2).bg(t.border)
-    .child(div().absolute().left(0).top(0).h(height).w(Math.max(pct > 0 ? height : 0, width * pct / 100)).rounded(height / 2).bg(level(w.percentUsed)))
+  return div().relative().w(width).h(height).flex_none().rounded(height / 2).bg(r.track)
+    .child(div().absolute().left(0).top(0).h(height).w(Math.max(pct > 0 ? height : 0, width * pct / 100)).rounded(height / 2).bg(level(w.percentUsed, r)))
     .when(e !== null, el => el.child(div().absolute().top(-2).h(height + 4).w(1).left(Math.round(width * (remaining && !w.shareOf ? 1 - e : e))).bg(t.foreground).opacity(0.45)));
 }
 
@@ -152,6 +147,7 @@ export default class Quota extends View {
   render(cx) {
     const t = theme();
     if (props()?.menu) return this.menu(t);
+    const r = roles(t, t.chrome);
     const on = quotaMachine();
     if (on !== this.machine) { this.machine = on; this.refresh(cx); }
     const data = shared(stateKey("quota.data")), error = shared(stateKey("quota.error")), o = options(), now = Date.now();
@@ -169,61 +165,61 @@ export default class Quota extends View {
         .tooltip(windows.map(w => `${p.label} ${w.label}: ${percentText(w, o.remaining)}${w.resetsAt && Date.parse(w.resetsAt) > now ? `, resets in ${until(w.resetsAt, now)}` : ""}`).join("\n") || `${p.label}: not signed in`)
         .child(h_flex().gap(5).items_center()
           .child(this.glyph(p, 12, t))
-          .when(o.names || !ICONS[p.id], el => el.child(div().text_color(signedIn(p) ? t.muted : t.dim).child(p.label))))
-        .when(!signedIn(p), el => el.child(div().size(6).rounded(3).border_1().border_color(t.dim)))
+          .when(o.names || !ICONS[p.id], el => el.child(div().text_color(signedIn(p) ? r.sub : r.hint).child(p.label))))
+        .when(!signedIn(p), el => el.child(div().size(6).rounded(3).border_1().border_color(r.hint)))
         .children(windows.map(w => {
           const pc = pace(w, now);
           return h_flex().gap(5).items_center()
-            .when(labels, el => el.child(div().text_size(10).text_color(t.dim).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
-            .when(barW > 0, el => el.child(bar(w, barW, 4, now, t, o.remaining)))
-            .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.muted).child(`${Math.round(percent(w, o.remaining))}%`))
-            .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(8).text_color(level(Math.max(60, w.percentUsed))).child("▲")));
+            .when(labels, el => el.child(div().text_size(10).text_color(r.hint).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
+            .when(barW > 0, el => el.child(bar(w, barW, 4, now, t, o.remaining, r)))
+            .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed, r) : r.sub).child(`${Math.round(percent(w, o.remaining))}%`))
+            .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(8).text_color(level(Math.max(60, w.percentUsed), r)).child("▲")));
         })));
     });
     return h_flex().id("quota").size_full().px(labels ? 12 : 8).gap(labels ? 11 : 7).items_center().justify_end().overflow_hidden()
-      .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted).cursor_pointer()
+      .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(r.sub).cursor_pointer()
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       .tooltip(`Quota on ${on ?? "this computer"}`)
       .when(stale, el => el.opacity(0.6))
       .on_click(() => this.openMenu())
       .on_mouse_down("right", () => this.openMenu())
-      .when(parts.length === 0, el => el.child(div().text_color(t.dim).child(error ? "Quota unavailable" : data ? "No quota to show" : "Loading quota…")))
+      .when(parts.length === 0, el => el.child(div().text_color(r.hint).child(error ? "Quota unavailable" : data ? "No quota to show" : "Loading quota…")))
       .children(parts);
   }
 
   menu(t) {
-    const data = shared(stateKey("quota.data")), error = shared(stateKey("quota.error")), o = options(), now = Date.now();
+    const r = roles(t, t.popover), data = shared(stateKey("quota.data")), error = shared(stateKey("quota.error")), o = options(), now = Date.now();
     const all = data?.providers ?? [];
     const toggle = (label, on, act, id) => h_flex().id(id).h(32).px(10).gap(10).rounded(6).items_center().cursor_pointer()
       .hover(s => s.bg(t.hover)).on_click(act)
-      .child(div().flex_1().text_color(on ? t.foreground : t.muted).child(label))
+      .child(div().flex_1().text_color(on ? t.foreground : r.sub).child(label))
       .child(div().size(16).flex_none().flex().items_center().justify_center()
         .when(on, el => el.child(svg("mods/quota/check.svg").size(16).text_color(t.accent))));
-    const heading = text => div().px(8).pt(10).pb(4).text_size(10.5).text_color(t.dim).child(text);
+    const heading = text => div().px(8).pt(10).pb(4).text_size(10.5).text_color(r.hint).child(text);
     const details = all.filter(p => !o.hidden.includes(p.id) && (signedIn(p) || o.signedOut)).map(p => v_flex().px(8).py(4).gap(4)
       .child(h_flex().gap(6).items_center()
         .child(this.glyph(p, 13, t))
         .child(div().font_semibold().text_color(t.foreground).child(p.label))
-        .child(div().text_size(10.5).text_color(t.dim).child(signedIn(p) ? (p.plan ?? "") : "not signed in")))
+        .child(div().text_size(10.5).text_color(r.hint).child(signedIn(p) ? (p.plan ?? "") : "not signed in")))
       .children(visibleWindows(p, o).map(w => {
         const pc = pace(w, now);
         return v_flex().gap(3)
           .child(h_flex().gap(8).items_center()
-            .child(div().w(62).flex_none().truncate().text_size(11.5).text_color(t.muted).child(w.kind === "session" ? "5 hours" : w.kind === "weekly" ? "Week" : w.label))
-            .child(bar(w, 120, 5, now, t, o.remaining))
-            .child(div().flex_1().text_right().text_size(11.5).text_color(w.percentUsed >= 60 ? level(w.percentUsed) : t.foreground).child(`${Math.round(percent(w, o.remaining))}%`)))
-          .child(div().pl(70).text_size(10.5).text_color(t.dim).child([
+            .child(div().w(62).flex_none().truncate().text_size(11.5).text_color(r.sub).child(w.kind === "session" ? "5 hours" : w.kind === "weekly" ? "Week" : w.label))
+            .child(bar(w, 120, 5, now, t, o.remaining, r))
+            .child(div().flex_1().text_right().text_size(11.5).text_color(w.percentUsed >= 60 ? level(w.percentUsed, r) : t.foreground).child(`${Math.round(percent(w, o.remaining))}%`)))
+          .child(div().pl(70).text_size(10.5).text_color(r.hint).child([
             w.resetsAt && Date.parse(w.resetsAt) > now ? `resets in ${until(w.resetsAt, now)}` : null,
             pc ? (Math.abs(pc.diff) < 5 ? "on pace" : pc.diff > 0 ? `${pc.diff}% ahead of pace` : `${-pc.diff}% under pace`) : null,
           ].filter(Boolean).join(" · ")));
       })));
     return v_flex().id("quota-menu").w_full().p(5).bg(t.popover).text_size(12.5).overflow_y_scrollbar()
       .child(h_flex().px(8).pt(4).pb(2).items_center()
-        .child(div().flex_1().text_size(11).text_color(t.dim).child(data ? `Quota ${o.remaining ? "remaining" : "used"} · ${ago(data.at, now)}` : "Agent quota"))
-        .child(div().id("quota-refresh").px(6).rounded(5).cursor_pointer().text_size(11).text_color(t.muted).hover(s => s.bg(t.hover))
+        .child(div().flex_1().text_size(11).text_color(r.hint).child(data ? `Quota ${o.remaining ? "remaining" : "used"} · ${ago(data.at, now)}` : "Agent quota"))
+        .child(div().id("quota-refresh").px(6).rounded(5).cursor_pointer().text_size(11).text_color(r.sub).hover(s => s.bg(t.hover))
           .on_click((_event, cx) => this.refresh(cx)).child("Refresh")))
-      .child(div().px(8).py(4).text_size(11).text_color(t.muted).child(`Machine: ${quotaMachine() ?? "This computer"}`))
-      .when(Boolean(error), el => el.child(div().px(8).py(4).text_size(11).text_color(level(95)).child(error)))
+      .child(div().px(8).py(4).text_size(11).text_color(r.sub).child(`Machine: ${quotaMachine() ?? "This computer"}`))
+      .when(Boolean(error), el => el.child(div().px(8).py(4).text_size(11).text_color(r.fail).child(error)))
       .children(details)
       .child(div().mx(8).my(6).h(1).bg(t.border))
       .child(toggle("Show remaining instead of used", o.remaining, () => setOptions({ remaining: !o.remaining }), "remaining"))

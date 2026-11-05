@@ -4,14 +4,20 @@ import { h_flex, v_flex } from "gpui-base";
 import { theme, exec, openOverlay } from "herdr";
 import { label, duration, pressure, jobKey } from "./model.js";
 import { snapshot } from "./poll.js";
-import { readable, contrast, flatten } from "./colors.js";
+import { readable, contrast, flatten, roles } from "./colors.js";
 
-export const colors = (t = theme()) => ({ run: t.accent, wait: t.ansi3, off: t.ansi1, ok: t.ansi2, hot: t.ansi11 ?? t.ansi3, idle: t.border });
+// One meaning per color, the same as the other mods (colors.js): amber waits, orange is a busy machine,
+// red is only offline or failed. `bg` is where the color shows.
+export const colors = (t = theme(), bg = t.background) => {
+  const r = roles(t, bg);
+  return { run: t.accent, wait: r.warn, off: r.fail, ok: r.ok, hot: r.hot, idle: t.border };
+};
 
 // Secondary text that stays readable: themes set `dim` for taste, often below 4.5:1.
 // `sub` reads on the view's background, `onIdle` on a free slot's fill, `track` is a bar's empty part.
 export const ink = (t = theme(), bg = t.background) => ({
   sub: readable(t.muted, bg, 4.5),
+  hint: readable(t.dim, bg, 4.5),
   onIdle: readable(t.muted, flatten(t.border, bg), 4.5),
   track: readable(flatten(t.dim, bg), bg, 3),
 });
@@ -45,8 +51,9 @@ export function openJob(j) {
 }
 
 export function repoTag(j, t) {
+  const fill = flatten(t.border, t.background);
   return div().w(34).flex_none().py(1).rounded(4).bg(t.border).text_center().text_size(10).font_semibold()
-    .text_color(t[j.color] ?? t.foreground).child(j.short);
+    .text_color(readable(t[j.color] ?? t.foreground, fill, 4.5)).child(j.short);
 }
 
 export function slotColor(r, t) {
@@ -64,7 +71,8 @@ export function squares(list, t) {
 
 export function loadBar(m, t, width = 60) {
   const p = pressure(m), c = colors(t);
-  const color = p == null ? t.border : p >= 1.5 ? c.off : p >= 0.9 ? c.hot : p >= 0.6 ? c.wait : c.ok;
+  // A busy machine is orange however busy: red stays for offline, and the text gives the number.
+  const color = p == null ? t.border : p >= 0.9 ? c.hot : c.ok;
   return div().w(width).h(5).rounded(3).bg(ink(t).track).overflow_hidden()
     .child(div().h_full().rounded(3).bg(color).w(Math.round(width * Math.min(1, p ?? 0))));
 }
@@ -90,7 +98,7 @@ export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true
       .child(div().truncate().text_color(t.foreground).child(title ?? label(j)))
       .child(div().truncate().text_size(11).text_color(ink(t).sub).child(sub))
       .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(ink(t).track).overflow_hidden()
-        .child(div().h_full().bg(slow ? t.ansi3 : t.accent).w(`${Math.round(pct * 100)}%`)))))
+        .child(div().h_full().bg(slow ? colors(t).wait : t.accent).w(`${Math.round(pct * 100)}%`)))))
     .child(div().flex_none().text_size(11).text_color(rightColor ?? t.muted).child(right));
 }
 

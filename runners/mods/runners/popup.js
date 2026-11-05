@@ -10,7 +10,7 @@ const MAX = 6;
 
 export function machineRow(m, t) {
   const busy = m.runners.filter((r) => r.job).length, off = m.runners.some((r) => r.status === "offline");
-  const c = colors(t);
+  const c = colors(t, t.popover);
   return h_flex().gap(10).px(6).py(2).items_center().text_size(11).text_color(t.muted)
     .child(div().size(7).rounded(4).bg(off ? c.off : m.loadError ? t.border : c.ok))
     .child(div().flex_1().min_w(0).truncate().child(`${m.name} · ${busy} of ${m.runners.length} busy`))
@@ -30,13 +30,13 @@ export class Popup {
     const root = v_flex().id("runners-popup").size_full().bg(t.popover).text_color(t.foreground).text_size(12);
     const head = h_flex().h(40).flex_none().px(12).gap(8).items_center().border_b(1).border_color(t.border)
       .child(div().font_semibold().text_size(13).child("Runners"))
-      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(fresh.stale ? colors(t).wait : ink(t, t.popover).sub).child(fresh.text))
+      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(fresh.stale ? colors(t, t.popover).wait : ink(t, t.popover).sub).child(fresh.text))
       .child(button("pop-refresh", "Refresh", t, () => refresh()));
     if (!s) return root.child(head);
-    const w = waiting(s), r = running(s), sum = summary(s), c = colors(t);
+    const w = waiting(s), r = running(s), sum = summary(s), c = colors(t, t.popover);
     const group = (id, title, right, rows) => v_flex().id(id).gap(2).px(6).py(8).border_b(1).border_color(t.border)
       .child(groupTitle(title, right, t)).children(rows);
-    const more = (list) => (list.length > MAX ? [div().px(6).text_size(11).text_color(t.dim).child(`and ${list.length - MAX} more in the panel`)] : []);
+    const more = (list) => (list.length > MAX ? [div().px(6).text_size(11).text_color(ink(t, t.popover).hint).child(`and ${list.length - MAX} more in the panel`)] : []);
     return root.child(head)
       // A popup sizes to its content: the body gets a cap, not flex, or it collapses to nothing.
       .child(v_flex().id("pop-body").max_h(520).overflow_y_scrollbar()
