@@ -24,6 +24,7 @@ async function graphql(query, vars = {}) {
   let r = await exec("gh", args).catch((e) => ({ code: -1, stderr: String(e) }));
   // Apps started from the Dock can miss Homebrew on PATH: try its arm64 prefix.
   if (r.code === -1) r = await exec("/opt/homebrew/bin/gh", args).catch((e) => ({ code: -1, stderr: String(e) }));
+  if (r.code === -1) throw new Error("gh is not installed: install it (brew install gh), then run gh auth login");
   if (r.code !== 0) {
     const msg = (r.stderr || r.stdout || "").trim().split("\n")[0];
     throw new Error(/auth login|not logged/i.test(msg) ? "Run gh auth login first" : msg || `gh exit ${r.code}`);

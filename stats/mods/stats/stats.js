@@ -63,7 +63,7 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
 
   const last30 = merged.filter((pr) => between(pr.mergedAt, now - 30 * DAY, now + 1));
   const prev30 = merged.filter((pr) => between(pr.mergedAt, now - 60 * DAY, now - 30 * DAY));
-  const hours = last30.map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.createdAt)) / 3600000);
+  const hoursOf = (list) => list.map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.createdAt)) / 3600000);
 
   // Decided in the last 90 days: merged, or closed without a merge.
   const decided = work.filter((pr) => between(pr.mergedAt ?? pr.closedAt ?? "", now - 90 * DAY, now + 1));
@@ -80,18 +80,21 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
   for (const { ai: a } of rated) ai[a.claude && a.codex ? "both" : a.claude ? "claude" : a.codex ? "codex" : "none"]++;
 
   const openPrs = (open ?? []).filter((pr) => !isPromotion(pr));
-  const oldest = openPrs.length ? Math.max(...openPrs.map((pr) => Math.floor((now - Date.parse(pr.createdAt)) / DAY))) : null;
+  const oldestPr = openPrs.reduce((o, pr) => (!o || Date.parse(pr.createdAt) < Date.parse(o.createdAt) ? pr : o), null);
 
   return {
     weeks: perWeek,
     days,
     mergedThisWeek: perWeek[perWeek.length - 1].merged,
     mergedLastWeek: perWeek[perWeek.length - 2]?.merged ?? 0,
+    pace: weekPace(merged, starts, perWeek, now),
     merged30: last30.length,
     mergedPrev30: prev30.length,
-    medianHours: median(hours),
+    medianHours: median(hoursOf(last30)),
+    prevMedianHours: median(hoursOf(prev30)),
     open: openPrs.length,
-    oldestOpenDays: oldest,
+    oldestOpenDays: oldestPr ? Math.floor((now - Date.parse(oldestPr.createdAt)) / DAY) : null,
+    oldestOpen: oldestPr?.repo ? { repo: oldestPr.repo, number: oldestPr.number } : null,
     repos,
     commits30: Object.values(commits ?? {}).reduce((s, n) => s + n, 0),
     commitsThisWeek: commitsThisWeek == null ? null : Object.values(commitsThisWeek).reduce((s, n) => s + n, 0),
@@ -101,6 +104,36 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
     decided: decided.length,
   };
 }
+
+// This week against your usual week at the same point: a Thursday is compared with the Monday to
+// Thursday of earlier weeks, not with whole weeks. Usual = the median of the last four full weeks.
+// `diff` (percent ahead or behind) and `projected` (where the week ends at your usual shape) stay
+// null until a usual week has at least 3 merges by this point, so a Monday morning shows no verdict.
+const PACE_WEEKS = 4, PACE_FLOOR = 3;
+export function weekPace(merged, starts, perWeek, now) {
+  const full = starts.slice(0, -1).slice(-PACE_WEEKS);
+  if (!full.length) return null;
+  const elapsed = now - starts[starts.length - 1];
+  const usualSoFar = median(full.map((ws) => merged.filter((pr) => between(pr.mergedAt, ws, ws + elapsed)).length));
+  const usualWeek = median(perWeek.slice(0, -1).slice(-PACE_WEEKS).map((w) => w.merged));
+  const thisWeek = perWeek[perWeek.length - 1].merged;
+  const known = usualSoFar >= PACE_FLOOR;
+  return {
+    usualWeek, usualSoFar,
+    diff: known ? Math.round(100 * (thisWeek - usualSoFar) / usualSoFar) : null,
+    projected: known ? Math.max(thisWeek, Math.round(thisWeek * usualWeek / usualSoFar)) : null,
+  };
+}
+
+// 4,430: grouped by hand, because the Herdr runtime's toLocaleString leaves digits ungrouped.
+export function num(n) {
+  if (n == null) return "—";
+  const [whole, frac] = String(Math.abs(n)).split(".");
+  return `${n < 0 ? "−" : ""}${whole.replace(/\B(?=(\d{3})+$)/g, ",")}${frac ? `.${frac}` : ""}`;
+}
+
+// 1.2k for chart labels, where a bar is about 20px wide.
+export const compact = (n) => (n >= 1000 ? `${(Math.round(n / 100) / 10).toString()}k` : String(n));
 
 // The same PR can come back from two search windows; numbers repeat across repos. At the AI cutoff
 // one copy has its AI marks and the other not: keep the one with marks.
@@ -121,9 +154,10 @@ export function duration(hours) {
   return `${(Math.round(hours / 2.4) / 10).toString()}d`;
 }
 
-// "+3 vs last week", or null when there is nothing to compare.
-export function delta(now, before) {
-  if (before == null) return null;
+// The change against a baseline: `d` for direction, `text` for the amount ("+3", "−2", "same").
+// The caller writes the baseline ("vs prior 30") in a quieter color.
+export function delta(now, before, format = num) {
+  if (before == null || now == null) return null;
   const d = now - before;
-  return { d, text: d === 0 ? "same as" : `${d > 0 ? "+" : "−"}${Math.abs(d)} vs` };
+  return { d, text: d === 0 ? "same" : `${d > 0 ? "+" : "−"}${format(Math.abs(d))}` };
 }

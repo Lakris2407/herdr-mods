@@ -25,6 +25,11 @@ The screenshot uses made-up data.
 - **Reviews** are other people's PRs you commented on (Codex and Claude reviews that post through
   your account count too), bucketed by when the PR was opened.
 - **Merge rate** is merged ÷ (merged + closed without merging) over the last 90 days.
+- **Pace** compares this week with your usual week at the same point: on a Thursday, with the Monday
+  to Thursday of the last four full weeks (the median), not with whole weeks. Within 10% reads "on
+  pace". The panel shows a verdict and a "~N by Sun" estimate only once a usual week has at least 3
+  merges by this point, so Monday morning shows your usual week instead.
+- **Time to merge** compares the median of the last 30 days with the 30 days before; less is better.
 - Weeks start on Monday in your local time.
 
 ## Settings
@@ -44,7 +49,7 @@ count commits on a branch other than the default, create `~/.config/herdr-app/st
 Everything comes from `gh api graphql`, so [`gh`](https://cli.github.com) must be logged in
 (`gh auth login`). A full load takes about 15 seconds: 13 weekly searches per account (search
 returns at most 1,000 rows), PR texts only for the last 30 days, and one query for commit counts.
-Only the computed numbers are kept, in Herdr's shared state (`stats.v1`), for 30 minutes, so the
+Only the computed numbers are kept, in Herdr's shared state (`stats.v2`), for 30 minutes, so the
 panel opens at once. **Refresh** reloads now, and `herdr-app do stats.refresh` does the same from a
 terminal. The mod sends nothing anywhere except your own `gh` queries to GitHub.
 
