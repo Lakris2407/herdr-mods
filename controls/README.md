@@ -1,7 +1,8 @@
 # Controls for Herdr
 
-One menu to turn any status-bar block and any side-panel button off and on. Hide the quota on a small
-screen, drop Files and Changes if you never use them, bring them back with one click.
+One menu to turn any status-bar block, any tab-bar button and any side-panel button off and on. Hide
+the quota on a small screen, drop Files, Changes or Skills if you never use them, bring them back with
+one click.
 
 ![Controls](preview.png)
 
@@ -9,6 +10,8 @@ screen, drop Files and Changes if you never use them, bring them back with one c
   so does a right-click on a panel button once the tab bar is patched.
 - **Status bar:** every block in your status row, with a tick when it shows. Click to hide or show it
   at once. Herdr saves that with your layout, so it stays after a restart.
+- **Tab bar buttons:** every mod block beside the tabs, such as the Skills toggle. Click to hide or
+  show it at once, like a status block. Hiding a button also closes the panel it opens.
 - **Side panel buttons:** every panel in your side-panel stack. Click to take its button out of the
   tab bar; the panel closes if it was open. This needs a small patch to your `tabs-plus` tab bar:
   [tabs-plus.md](tabs-plus.md).

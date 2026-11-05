@@ -9,7 +9,7 @@ where several coding agents work at once, with self-hosted build machines beside
 | [Runners](runners/) | What waits for your self-hosted runners and build machines, what runs on them and each machine's load: a status-bar chip, a side panel and a timeline. |
 | [Your stats](stats/) | Your own delivery numbers in a side panel: PRs merged, time to merge, AI share (Claude vs Codex), per-repo breakdown. |
 | [Path menu](path-menu/) | Right-click a terminal to open the files and folders on screen. |
-| [Controls](controls/) | One menu to turn any status-bar block and any side-panel button off and on. |
+| [Controls](controls/) | One menu to turn any status-bar block, tab-bar button and side-panel button off and on. |
 
 ![Status bar with Runners, system load and quota](runners/preview-bar.png)
 

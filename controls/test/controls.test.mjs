@@ -5,6 +5,8 @@ import { items, label, toggle } from "../mods/controls/controls.js";
 const block = (id, mod, extra = {}) => ({ id, type: "block", content: { mod, ...extra.content }, ...extra.node });
 const root = {
   id: "root", type: "column", children: [
+    { id: "tabs-row", type: "row", children: [block("tabs", "tabs-plus"), block("skillshare-toggle", "skillshare", { content: { props: { role: "toggle" } } })] },
+    { id: "skillshare-panel", type: "column", children: [block("skillshare", "skillshare")] },
     { id: "panel", type: "column", children: [{ id: "panel-body", type: "stack", children: [block("files", "files"), block("runners", "runners")] }] },
     { id: "status", type: "row", children: [
       block("status-main", "workspace-status"),
@@ -15,18 +17,19 @@ const root = {
   ],
 };
 
-test("lists status blocks without itself, and panel buttons", () => {
-  const { status, panels } = items(root, ["files"]);
+test("lists status blocks without itself, tab-row buttons, and panel buttons", () => {
+  const { status, tabs, panels } = items(root, ["files"]);
   assert.deepEqual(status, [
     { id: "status-main", label: "Workspace", on: true },
     { id: "status-ci", label: "GitHub CI", on: true },
     { id: "status-runners", label: "Runners", on: false },
   ]);
+  assert.deepEqual(tabs, [{ id: "skillshare-toggle", label: "Skills", on: true, panel: "skillshare-panel" }]);
   assert.deepEqual(panels, [{ id: "files", label: "Files", on: false }, { id: "runners", label: "Runners", on: true }]);
 });
 
 test("a layout without a status row or panel stack lists nothing", () => {
-  assert.deepEqual(items({ id: "root", children: [block("status", "workspace-status")] }), { status: [], panels: [] });
+  assert.deepEqual(items({ id: "root", children: [block("status", "workspace-status")] }), { status: [], tabs: [], panels: [] });
 });
 
 test("unknown mods get a readable name", () => {
@@ -38,4 +41,9 @@ test("toggle adds and removes once", () => {
   assert.deepEqual(toggle(["a"], "a", false), ["a"]);
   assert.deepEqual(toggle(["a"], "b", false), ["a", "b"]);
   assert.deepEqual(toggle(["a", "b"], "a", true), ["b"]);
+});
+
+test("a tab-row button without its own panel column names no panel", () => {
+  const { tabs } = items({ id: "root", children: [{ id: "tabs-row", children: [block("tabs", "tabs"), block("new", "new-menu", { node: { hidden: true } })] }] });
+  assert.deepEqual(tabs, [{ id: "new", label: "New menu", on: false }]);
 });
