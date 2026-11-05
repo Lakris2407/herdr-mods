@@ -1,1 +1,1 @@
-{ "place": "none", "title": "Your stats" }
+{ "place": "none", "title": "Your stats", "focusable": true }

@@ -41,9 +41,14 @@ export function aiTools({ body = "", headRefName = "", messages = [] }) {
   };
 }
 
+// An open PR older than this many days is stale: worth closing or finishing.
+export const STALE_PR_DAYS = 30;
+
 // prs: [{ repo, number, state, createdAt, mergedAt, closedAt, headRefName, baseRefName, ai: {claude, codex} | null }]
-// commits / commitsThisWeek: { "owner/repo": count } for the last 30 days / since Monday; reviews: { last30, prev30 }; open: [{ repo, createdAt, ... }]
-export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, weeks = 12 }) {
+// commits: { "owner/repo": count } for the last 30 days; reviews: { last30, prev30 };
+// open: [{ repo, number, createdAt, isDraft, reviewDecision, checks }] (your open PRs);
+// reviewRequests: [{ repo, number, createdAt }] (other people's open PRs that ask for your review).
+export function buildStats({ prs, commits, reviews, open, reviewRequests, now, weeks = 12 }) {
   const work = dedupe(prs).filter((pr) => !isPromotion(pr));
   const merged = work.filter((pr) => pr.mergedAt);
   const starts = weekStarts(now, weeks);
@@ -65,8 +70,8 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
   const prev30 = merged.filter((pr) => between(pr.mergedAt, now - 60 * DAY, now - 30 * DAY));
   const hoursOf = (list) => list.map((pr) => (Date.parse(pr.mergedAt) - Date.parse(pr.createdAt)) / 3600000);
 
-  // Decided in the last 90 days: merged, or closed without a merge.
-  const decided = work.filter((pr) => between(pr.mergedAt ?? pr.closedAt ?? "", now - 90 * DAY, now + 1));
+  // Decided in the last 30 days, the window of every other number in its card: merged, or closed without a merge.
+  const decided = work.filter((pr) => between(pr.mergedAt ?? pr.closedAt ?? "", now - 30 * DAY, now + 1));
   const rate = decided.length ? Math.round(100 * decided.filter((pr) => pr.mergedAt).length / decided.length) : null;
 
   const byRepo = {};
@@ -77,10 +82,16 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
   // AI share over the last 30 days' merged PRs that still had their texts loaded.
   const rated = last30.filter((pr) => pr.ai);
   const ai = { claude: 0, codex: 0, both: 0, none: 0, total: rated.length };
-  for (const { ai: a } of rated) ai[a.claude && a.codex ? "both" : a.claude ? "claude" : a.codex ? "codex" : "none"]++;
+  const toolOf = (a) => (a.claude && a.codex ? "both" : a.claude ? "claude" : a.codex ? "codex" : "none");
+  for (const { ai: a } of rated) ai[toolOf(a)]++;
+  // Median time to merge for each tool, so Claude and Codex compare on more than volume.
+  const aiHours = Object.fromEntries(["claude", "codex", "both", "none"].map((k) =>
+    [k, median(hoursOf(rated.filter((pr) => toolOf(pr.ai) === k)))]));
 
   const openPrs = (open ?? []).filter((pr) => !isPromotion(pr));
-  const oldestPr = openPrs.reduce((o, pr) => (!o || Date.parse(pr.createdAt) < Date.parse(o.createdAt) ? pr : o), null);
+  const oldestPr = oldest(openPrs);
+  const waiting = waitingOn(openPrs, reviewRequests ?? []);
+  const stale = openPrs.filter((pr) => now - Date.parse(pr.createdAt) > STALE_PR_DAYS * DAY);
 
   return {
     weeks: perWeek,
@@ -94,15 +105,36 @@ export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, 
     prevMedianHours: median(hoursOf(prev30)),
     open: openPrs.length,
     oldestOpenDays: oldestPr ? Math.floor((now - Date.parse(oldestPr.createdAt)) / DAY) : null,
-    oldestOpen: oldestPr?.repo ? { repo: oldestPr.repo, number: oldestPr.number } : null,
+    oldestOpen: ref(oldestPr),
+    stale: stale.length,
+    waiting,
     repos,
     commits30: Object.values(commits ?? {}).reduce((s, n) => s + n, 0),
-    commitsThisWeek: commitsThisWeek == null ? null : Object.values(commitsThisWeek).reduce((s, n) => s + n, 0),
     ai,
+    aiHours,
     reviews: reviews ?? { last30: 0, prev30: 0 },
     mergeRate: rate,
     decided: decided.length,
   };
+}
+
+const ref = (pr) => (pr?.repo ? { repo: pr.repo, number: pr.number } : null);
+const oldest = (list) => list.reduce((o, pr) => (!o || Date.parse(pr.createdAt) < Date.parse(o.createdAt) ? pr : o), null);
+
+// What waits on you, most urgent first: reviews you were asked for, then your own PRs whose checks
+// fail, that a reviewer sent back, or that are ready to merge (checks pass, not a draft, no review
+// blocking). Each bucket keeps its count and its oldest PR, so a bucket of one opens that PR.
+export function waitingOn(openPrs, reviewRequests) {
+  const fails = (pr) => pr.checks === "FAILURE" || pr.checks === "ERROR";
+  const ready = (pr) => !pr.isDraft && pr.checks === "SUCCESS"
+    && pr.reviewDecision !== "CHANGES_REQUESTED" && pr.reviewDecision !== "REVIEW_REQUIRED";
+  const bucket = (key, list) => ({ key, count: list.length, first: ref(oldest(list)) });
+  return [
+    bucket("review", reviewRequests),
+    bucket("failing", openPrs.filter(fails)),
+    bucket("changes", openPrs.filter((pr) => pr.reviewDecision === "CHANGES_REQUESTED")),
+    bucket("ready", openPrs.filter(ready)),
+  ];
 }
 
 // This week against your usual week at the same point: a Thursday is compared with the Monday to
@@ -154,10 +186,23 @@ export function duration(hours) {
   return `${(Math.round(hours / 2.4) / 10).toString()}d`;
 }
 
-// The change against a baseline: `d` for direction, `text` for the amount ("+3", "−2", "same").
-// The caller writes the baseline ("vs prior 30") in a quieter color.
-export function delta(now, before, format = num) {
+// The change against a baseline, in words, so the verdict never rests on color: "274 more", "9 fewer",
+// "17m slower", "same". `d` keeps the direction for the caller's tone; `pct` is the change as a
+// percentage of the baseline (null when the baseline is 0).
+export const COUNT_WORDS = ["more", "fewer"], TIME_WORDS = ["slower", "faster"];
+export function change(now, before, { format = num, words = COUNT_WORDS } = {}) {
   if (before == null || now == null) return null;
   const d = now - before;
-  return { d, text: d === 0 ? "same" : `${d > 0 ? "+" : "−"}${format(Math.abs(d))}` };
+  return { d, pct: before ? Math.round(100 * d / before) : null, text: d === 0 ? "same" : `${format(Math.abs(d))} ${d > 0 ? words[0] : words[1]}` };
+}
+
+// What went wrong, as a sentence that says what to do. `gh` and our own messages pass through; GitHub's
+// raw API errors get a plain sentence first.
+export function plainError(message) {
+  const m = String(message ?? "").trim();
+  if (/rate limit/i.test(m)) return "GitHub's API limit is used up for now. Refresh again in a few minutes.";
+  if (/could not resolve|connection|timed? ?out|network|EOF|ENOTFOUND|ECONNRESET/i.test(m))
+    return "Couldn't reach GitHub. Check the network, then refresh.";
+  if (/^gh is not installed|^Run gh auth login|is not valid JSON$/.test(m)) return m;
+  return m ? `GitHub returned an error: ${m}` : "Couldn't load your numbers. Refresh to try again.";
 }
