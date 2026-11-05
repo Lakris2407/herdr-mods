@@ -82,6 +82,45 @@ export function byRun(list) {
 // Load per core, 0..1+: a machine at 8 on 8 cores is full.
 export const pressure = (m) => (m.load == null || !m.cores ? null : m.load / m.cores);
 
+// Offline toasts. A slot that drops for a moment and comes back says nothing: it must stay offline
+// OFF_MS first. Then one toast per machine, not per slot, and one more when they are all back.
+// `was`: { since: {slot: ms}, told: {slot: machine} } from the last snapshot. Returns the next state
+// and what to post: [{ kind: "off" | "back", machine, names }].
+export const OFF_MS = 60000;
+export function offlineNews(was, machines, now) {
+  const since = {}, told = { ...(was?.told ?? {}) }, posts = [];
+  for (const m of machines) {
+    const off = m.runners.filter((r) => r.status === "offline");
+    for (const r of off) since[r.name] = was?.since?.[r.name] ?? now;
+    const fresh = off.filter((r) => now - since[r.name] >= OFF_MS && !told[r.name]).map((r) => r.name);
+    if (fresh.length) { posts.push({ kind: "off", machine: m.name, names: fresh }); for (const n of fresh) told[n] = m.name; }
+    const back = m.runners.filter((r) => told[r.name] && r.status === "online").map((r) => r.name);
+    for (const n of back) delete told[n];
+    if (back.length && !Object.values(told).includes(m.name)) posts.push({ kind: "back", machine: m.name, names: back });
+  }
+  // A slot no machine lists any more is forgotten.
+  const listed = new Set(machines.flatMap((m) => m.runners.map((r) => r.name)));
+  for (const n of Object.keys(told)) if (!listed.has(n)) delete told[n];
+  return { state: { since, told }, posts };
+}
+
+// The words of one offline toast.
+export function offlineToast(p) {
+  const one = p.names.length === 1;
+  if (p.kind === "back") return { title: `${p.machine} is back online`, body: one ? `${p.names[0]} takes jobs again` : `${p.names.length} runners take jobs again` };
+  return { title: one ? `${p.names[0]} is offline` : `${p.names.length} runners on ${p.machine} are offline`,
+    body: `${one ? p.machine + " · jobs" : "Their jobs"} wait for another slot · open Runners` };
+}
+
+// The chip's words. Each count carries its noun, so "4 waiting" beside "7 agents" never reads as
+// agents waiting on you: "4 jobs waiting", "1 runner offline".
+const plural = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+export function chipWords(sum, offline = 0) {
+  // "runners idle" beside "2 runners offline" says nothing more: offline alone.
+  const state = sum.waiting ? `${plural(sum.waiting, "job")} waiting` : sum.busy ? `${plural(sum.busy, "job")} running` : offline ? "" : "runners idle";
+  return { state, offline: offline ? `${plural(offline, "runner")} offline` : "" };
+}
+
 export function summary(s, now = Date.now()) {
   const all = slots(s), w = waiting(s);
   return {

@@ -56,7 +56,7 @@ Herdr's own layouts and mods are read-only, so the mods go into a copy of each.
 
    ```json
    { "id": "status", "type": "row", "size": { "px": 28 }, "resizable": false, "children": [
-     { "id": "status-main", "type": "block", "content": { "mod": "workspace-status" }, "size": { "weight": 1.7 }, "min": 160 }
+     { "id": "status-main", "type": "block", "content": { "mod": "workspace-status" }, "size": { "weight": 1.9 }, "min": 160 }
    ] }
    ```
 
@@ -66,7 +66,7 @@ Herdr's own layouts and mods are read-only, so the mods go into a copy of each.
 
    Order the row by urgency, not by mod: what needs you on the left (the space's branch and agents,
    CI, the runners chip), machine telemetry on the right (system, then quota). Give `status-main` a
-   `min` that fits the branch name, about 160. The weights in each README (runners 3.0, system 2.0,
+   `min` that fits the branch name, about 160. The weights in each README (runners 2.8, system 2.0,
    quota 2.4) keep the window labels on the quota before the system graphs, which say less.
 4. Side panels go into the `panel-body` stack, beside Files and Changes. Give each one a button in
    `~/.config/herdr-app/mods/tabs-plus/main.js`: add its id to the enabled panels and a
