@@ -102,3 +102,30 @@ test("the plan puts waiting jobs on the slot of their pool that frees first", ()
   assert.deepEqual(p.placed.map((x) => [x.job.id, x.slot, (x.start - now) / MIN]), [[3, "b", 0], [4, "a", 1]]);
   assert.deepEqual(p.unplaced.map((j) => j.id), [5]);
 });
+
+test("a failed read keeps the time of the last good data", async () => {
+  state.files.set(CONFIG, JSON.stringify({ demo: true }));
+  state.exec = async () => { throw new Error("demo must not run programs"); };
+  const good = await read();
+  // The next read finds the config broken; the views must not call the old jobs fresh.
+  state.files.set(CONFIG, "{ not json");
+  poll.refresh();
+  await new Promise((r) => setTimeout(r, 2));
+  const cx = { spawn: (f) => f(cx), notify() {} };
+  await poll.tick(cx);
+  for (let i = 0; i < 100 && !poll.snapshot().errorAt; i++) await new Promise((r) => setTimeout(r, 5));
+  const s = poll.snapshot();
+  assert.equal(s.at, good.at);
+  assert.ok(s.errorAt >= good.at);
+  assert.match(s.error, /not valid JSON/);
+  assert.equal(s.jobs.length, good.jobs.length);
+});
+
+test("readable text on a theme fill with alpha reaches the floor", async () => {
+  const { readable, flatten, contrast } = await import("../mods/runners/colors.js");
+  // A dark theme's border is often white at low alpha; read it as white and the text gets darker, not lighter.
+  const fill = flatten("#ffffff18", "#282a36");
+  assert.equal(fill, "#3c3e49");
+  assert.ok(contrast(readable("#9fa0a5", fill, 4.5), fill) >= 4.5);
+  assert.equal(flatten("#282a36", "#000000"), "#282a36");
+});

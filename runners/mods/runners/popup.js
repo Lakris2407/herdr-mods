@@ -3,8 +3,8 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, props, run, closeOverlay } from "herdr";
 import { snapshot, refresh } from "./poll.js";
-import { waiting, running, duration, ago, summary } from "./model.js";
-import { jobRow, groupTitle, loadBar, loadText, button, colors, runTime, openLanes } from "./ui.js";
+import { waiting, running, duration, summary } from "./model.js";
+import { jobRow, groupTitle, loadBar, loadText, button, colors, ink, freshness, runTime, openLanes } from "./ui.js";
 
 const MAX = 6;
 
@@ -26,11 +26,11 @@ export class Popup {
   }
 
   render() {
-    const t = theme(), s = snapshot(), now = Date.now();
+    const t = theme(), s = snapshot(), now = Date.now(), fresh = freshness(s, now);
     const root = v_flex().id("runners-popup").size_full().bg(t.popover).text_color(t.foreground).text_size(12);
     const head = h_flex().h(40).flex_none().px(12).gap(8).items_center().border_b(1).border_color(t.border)
       .child(div().font_semibold().text_size(13).child("Runners"))
-      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(s ? `updated ${ago(s.at, now)}` : "loading…"))
+      .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(fresh.stale ? colors(t).wait : ink(t, t.popover).sub).child(fresh.text))
       .child(button("pop-refresh", "Refresh", t, () => refresh()));
     if (!s) return root.child(head);
     const w = waiting(s), r = running(s), sum = summary(s), c = colors(t);

@@ -11,8 +11,13 @@ GitHub Actions runners and any machine you can reach over ssh.
   red = offline), and how many jobs wait. Click it to open or close the Runners panel; right-click
   it for a quick-look popup. On a narrow status bar it drops the title, then the squares, so the
   counts always show.
-- **Panel** beside Files and Changes: totals, each machine with its load and slots, the waiting
-  jobs (oldest first) and the jobs that finished in the last hour.
+- **Panel** beside Files and Changes: totals (waiting, failed in the last hour, busy slots, today's
+  wait), the waiting jobs (oldest first, only when some wait), each machine with its load and slots,
+  and the finished jobs. Failures stay listed for the hour; passed jobs drop off after 10 minutes
+  (`Show N older` brings them back). Each running slot shows how long its job has run, with a line
+  for its progress against the usual length (amber past 1.2x). A machine's dot is green only when a
+  slot or ssh answered; a grey ring means no status yet. When a read fails, the header says how old
+  the data is.
 - **Timeline**, a window you open from the panel or the popup: a lane per slot over the last 30
   minutes and the next 10. Waiting jobs sit where the first free slot of their pool should take them,
   from how long each job usually takes.

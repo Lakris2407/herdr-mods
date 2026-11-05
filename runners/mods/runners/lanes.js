@@ -5,8 +5,8 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, props, closeOverlay, settings } from "herdr";
 import { snapshot } from "./poll.js";
-import { slots, plan, jobKey, label, duration, ago } from "./model.js";
-import { colors, button, openJob } from "./ui.js";
+import { slots, plan, jobKey, label, duration } from "./model.js";
+import { colors, ink, freshness, button, openJob } from "./ui.js";
 
 const MIN = 60000, BACK = 30 * MIN, AHEAD = 10 * MIN, SPAN = BACK + AHEAD;
 const NAME_W = 130, PAD = 16, LANE_H = 24;
@@ -15,13 +15,13 @@ export class Lanes {
   init() { this.width = 940; }
 
   render() {
-    const t = theme(), s = snapshot(), now = Date.now(), c = colors(t);
+    const t = theme(), s = snapshot(), now = Date.now(), c = colors(t), fresh = freshness(s, now);
     const root = v_flex().id("lanes").size_full().bg(t.popover).text_color(t.foreground).text_size(11)
       // Sizes arrive in screen pixels; the layout works in zoomed units.
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } });
     const head = h_flex().h(42).flex_none().px(PAD).gap(8).items_center().border_b(1).border_color(t.border)
       .child(div().font_semibold().text_size(13).child("Runner timeline"))
-      .child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(s ? `last 30 min and next 10 · updated ${ago(s.at, now)}` : "loading…"))
+      .child(div().flex_1().min_w(0).truncate().text_color(fresh.stale ? c.wait : ink(t, t.popover).sub).child(s ? `last 30 min and next 10 · ${fresh.text}` : fresh.text))
       .child(div().on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .child(button("lanes-close", "Close", t, () => closeOverlay(props()?.overlay))));
     if (!s) return root.child(head);
