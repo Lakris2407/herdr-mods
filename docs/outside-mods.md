@@ -1,53 +1,81 @@
-# Notes for the mods outside this repo
+# Changes to Herdr's own mods
 
 A design review of the whole Herdr setup (2026-11-05) found problems in mods this repo does not hold:
-Herdr's own `spaces`, `agents`, `github`, `workspace-status` and the `tabs-plus` clone. Herdr's mods are
-read-only, so each fix needs a clone (`herdr-app do mod.clone '{"name":"spaces","as":"spaces-plus"}'`)
-or a change upstream. The mods here already follow these rules; see [shared/colors.js](../shared/colors.js).
+Herdr's own `spaces`, `agents`, `github` and `workspace-status`, and the `tabs-plus` clone. Herdr's
+mods are read-only and carry no license, so this repo does not ship copies of them. This page says how
+to make the same clones and what to change in each. A clone is yours and Herdr never updates it.
 
-## Color: one meaning per color
+## Make the clones
 
-Red means failed, offline or needs you now, and nothing else. Use `roles()` from `shared/colors.js`.
+```sh
+for m in spaces agents github workspace-status; do
+  herdr-app do mod.clone "{\"name\":\"$m\",\"as\":\"$m-plus\"}"
+  cp shared/colors.js ~/.config/herdr-app/mods/$m-plus/colors.js
+done
+cp shared/colors.js ~/.config/herdr-app/mods/tabs-plus/colors.js
+```
 
-| Where | Now | Change to |
-| --- | --- | --- |
-| `spaces/main.js:367`, commits behind main (↓4) | red | `sub` text; the arrow carries the direction |
-| `spaces`, commits ahead (↑) | green | `sub` text, so ↑ and ↓ differ by shape, not only by color |
-| `agents`, the "Working" group | yellow, the same as a waiting job | the theme's `accent`; keep amber (`warn`) for "Needs you" |
-| `github/ci.js:74`, CI failed | red | keep: this is a failure |
-| `spaces`, `agents`, `workspace-status`, `github` panel | raw `t.dim` (3.14:1 on chrome, 2.78:1 on a panel) | `roles(t, bg).hint` (4.5:1) |
+In `~/.config/herdr-app/layouts/main-plus.json`, point each block at its clone (`spaces-plus`,
+`agents-plus`, `github-plus` for both the panel and the `status-ci` block, `workspace-status-plus`).
+Give `status-main` a `min` of 160, and the sidebar lists `spaces` weight 1 and `agents` weight 2, so the
+agents get the room.
 
-## Sidebar: say what the space is before its ID
+Each clone below starts the same way: it wraps the theme so the quiet text reads, using
+[shared/colors.js](../shared/colors.js).
 
-- Worktree spaces show a generated name such as `20261105-131844-29722` in full and cut the repo to
-  "blockt…". Show the repo and the task or branch first; put the timestamp in the tooltip.
-- The avatar is the first character of the name (`spaces/main.js:421`), so two worktree spaces both
-  show "2". Use the repo's initial and color.
-- Agent rows cut both the space and the task ("Serve…", "Dinfi…"). Show the task first, the space
-  second. Hide the program icon when every agent runs the same program.
-- The Spaces list takes half the height and is mostly empty. Size it to its rows, so Agents gets the room.
+```js
+import { theme as herdrTheme } from "herdr";
+import { roles, readable } from "./colors.js";
+function theme() {
+  const t = herdrTheme(), r = roles(t, t.chrome); // t.background for the GitHub panel
+  return { ...t, dim: r.hint, muted: r.sub };
+}
+```
 
-## Status bar
+## spaces-plus
 
-- `workspace-status`: at weight 1.7 and `min` 90 only the branch icon shows. Give the block `min` 160,
-  or let the branch name shrink before the icon.
-- `github` CI view: with no pull request it still draws an empty bar at weight 0.8. Draw nothing, and
-  let the layout give the room to the others.
-- Order: what needs you on the left, telemetry on the right (see the [README](../README.md#one-time-setup)).
+- The theme wrapper above: `t.dim` was 3.14:1 on the sidebar.
+- Ahead (↑) and behind (↓) use `t.muted`, not green and red. Being behind main is not a failure, and
+  the arrow carries the direction.
+- A space named by a worktree tool (`20261105-131844-29722`) shows its repo instead, with the branch
+  after it, or the time it was made (`13:18`) when the branch is main. The full name is in the tooltip,
+  and the avatar takes the repo's initial.
+- The avatar letter is white or the theme's background, whichever reads better on its color.
 
-## Tab bar and panels
+## agents-plus
 
-- `tabs-plus`: the tab list takes all free room (`flex_1`), so the new-tab "+" lands beside the panel
-  buttons (`tabs-plus/main.js:112-114`) and reads as "add a panel". Put "+" inside the tab row right
-  after the last tab, then a spacer, a divider and the panel buttons.
-- Skillshare has its own fixed 118 px toggle and its own column in `main-plus.json` (`skillshare-toggle`,
-  `skillshare-panel`), with a color logo. Move it into `panel-body` beside the others, with a one-color
-  icon, so one panel shows at a time and the terminal keeps its width.
-- `github` panel: with nothing open, hide the sort, label and search controls above "No open pull
-  requests". Its Refresh is plain text; the other panels draw it as a button with an edge.
+- The theme wrapper, plus `working: readable(t.accent, t.chrome, 4.5)`: "Working" and its spinner take
+  the accent, so they no longer share amber with a job that waits. "Needs you" keeps `t.blocked`.
+- In the priority view a row shows the task first, then `· space`.
+- When every agent runs the same program, the rows drop the program icon.
 
-## Not a fix: `minimum_contrast`
+## github-plus
 
-`settings.json` has `"minimum_contrast": 1.0`. This setting changes terminal text only, not the
-sidebar, the bars or the panels, and above about 3 it turns dim terminal text near-white. It does not
-fix the problems above.
+- `panel.js`: the theme wrapper on `t.background`. Refresh is a raised button, like the Runners and
+  Stats panels. Sort, labels and search show only when there is a list to narrow, or a filter is on.
+- `ci.js`: the theme wrapper with `ansi1: r.fail, ansi2: r.ok` and `working` in the accent.
+
+## workspace-status-plus
+
+- The theme wrapper.
+- It measures its width (`on_size_change`) and keeps parts in this order: the branch (shortened,
+  never dropped), the agents and who needs you, the machine from 330 px, the palette hint from 440 px.
+  Before, every part shrank at once and only icons were left. The dot turns `t.blocked` when an agent
+  needs you.
+
+## tabs-plus
+
+- The theme wrapper, plus `working` in the accent.
+- "+" sits inside the tab row, right after the last tab, with a "New tab" tooltip; a 1 px divider in
+  `t.border` comes before the panel buttons. Before, the tab row took all free room and "+" landed
+  beside the panel buttons, so it read as "add a panel".
+- One side panel at a time: when the panel stack and Skillshare's own column are both open, the one
+  opened earlier closes. Skillshare tracks its own `skillshare-panel` node, so moving it into
+  `panel-body` would mean changing that mod too.
+
+## Not changed
+
+- `minimum_contrast` in `settings.json` changes terminal text only, not the sidebar, the bars or the
+  panels, and above about 3 it turns dim terminal text near-white.
+- The CI block keeps its weight when there is no pull request: a layout cannot give its room away
+  while the app runs, and hiding it would clash with the Controls menu.
