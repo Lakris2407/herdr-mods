@@ -170,7 +170,7 @@ export default class Quota extends View {
     // The window label goes last: "25%" alone does not say which limit it is.
     const width = this.width ?? Infinity, need = list.reduce((n, p) => n + p.windows.filter(x => o.kinds[x.kind] ?? false).length, 0);
     const per = need ? (width - 24 - list.length * 46) / need : Infinity;
-    const barW = per >= 96 ? 34 : per >= 76 ? 20 : 0, labels = per >= 52;
+    const barW = per >= 96 ? 34 : per >= 76 ? 20 : 0, labels = per >= 40;
     const parts = [], spoken = [];
     list.forEach((p, i) => {
       if (i > 0) parts.push(div().w(1).h(12).flex_none().bg(t.border));
