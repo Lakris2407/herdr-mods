@@ -42,8 +42,8 @@ export function aiTools({ body = "", headRefName = "", messages = [] }) {
 }
 
 // prs: [{ repo, number, state, createdAt, mergedAt, closedAt, headRefName, baseRefName, ai: {claude, codex} | null }]
-// commits: { "owner/repo": count } for the last 30 days; reviews: { last30, prev30 }; open: [{ repo, createdAt, ... }]
-export function buildStats({ prs, commits, reviews, open, now, weeks = 12 }) {
+// commits / commitsThisWeek: { "owner/repo": count } for the last 30 days / since Monday; reviews: { last30, prev30 }; open: [{ repo, createdAt, ... }]
+export function buildStats({ prs, commits, commitsThisWeek, reviews, open, now, weeks = 12 }) {
   const work = dedupe(prs).filter((pr) => !isPromotion(pr));
   const merged = work.filter((pr) => pr.mergedAt);
   const starts = weekStarts(now, weeks);
@@ -94,6 +94,7 @@ export function buildStats({ prs, commits, reviews, open, now, weeks = 12 }) {
     oldestOpenDays: oldest,
     repos,
     commits30: Object.values(commits ?? {}).reduce((s, n) => s + n, 0),
+    commitsThisWeek: commitsThisWeek == null ? null : Object.values(commitsThisWeek).reduce((s, n) => s + n, 0),
     ai,
     reviews: reviews ?? { last30: 0, prev30: 0 },
     mergeRate: rate,

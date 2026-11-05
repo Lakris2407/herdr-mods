@@ -3,7 +3,7 @@
 import { visibleWindows } from "./quota-windows.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { runQuotaCommand } from "./quota-command.js";
+import { runQuotaCommand, copilotWindows } from "./quota-command.js";
 import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, spaces } from "herdr";
 
 const EVERY = 120000, STALE = 10 * 60000;
@@ -81,9 +81,7 @@ async function load(on = null) {
   if (r.code !== 0) throw new Error(`quota-axi failed: ${(r.stderr || "").trim().split("\n").pop() || `exit ${r.code}`}`);
   // An interactive shell can print a banner first; the report starts at the first brace.
   const data = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
-  return {
-    at: Date.now(),
-    providers: (data.providers ?? []).map(p => ({
+  const providers = (data.providers ?? []).map(p => ({
       id: p.provider, label: p.label ?? p.provider, plan: p.plan ?? null, status: p.state?.status ?? null,
       windows: (p.windows ?? []).map(w => ({
         id: w.id, label: w.label, kind: w.kind, shareOf: w.shareOf ?? null,
@@ -92,8 +90,11 @@ async function load(on = null) {
           : w.shareOf == null && Number.isFinite(w.percentRemaining) ? 100 - w.percentRemaining : null,
         resetsAt: w.resetsAt ?? null, windowSeconds: w.windowSeconds ?? null,
       })).filter(w => Number.isFinite(w.percentUsed)),
-    })),
-  };
+    }));
+  // This computer only: gh on a remote machine would need its own login there.
+  const copilot = on == null ? providers.find(p => p.id === "copilot" && !p.windows.length) : null;
+  if (copilot) copilot.windows = (await copilotWindows(exec)) ?? [];
+  return { at: Date.now(), providers };
 }
 
 export default class Quota extends View {
