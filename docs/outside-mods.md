@@ -55,6 +55,25 @@ function theme() {
   Stats panels. Sort, labels and search show only when there is a list to narrow, or a filter is on.
 - `ci.js`: the theme wrapper with `ansi1: r.fail, ansi2: r.ok` and `working` in the accent.
 
+The Issues tab, after a critique of a bot-heavy backlog (45 open, 8 of them `[grafana]` alerts):
+
+- `issues.js` (new, pure): issues that share a leading `[tag]` (two or more) fold into one row,
+  "grafana · 8 issues · github-actions · 7 P1 1 P2", placed where its first issue was. It opens in
+  place; the issues inside drop the tag from their titles and the repeated author.
+- "No bots" in the filter bar, once a bot has filed something: `-author:<login>` for each bot login
+  seen in the repo (`is_bot`, or an `app/` login), so GitHub's 50 are all people's.
+- Titles take the full width and wrap. The Agent button moved to the meta line and shows only on
+  the row under the pointer or the keyboard cursor; its tooltip names the right-click shortcut.
+- Labels: the `P0`-`P3` label leads in its own color (P0 `fail`, P1 `hot`, P2 `warn`, P3 `sub`), so
+  red still means act now. The other labels are quiet words, at most two, then "+N". The issue
+  number is quiet text, not the accent.
+- A failed refresh with a list on screen shows a `warn` banner: "Last refresh failed 2m ago ·
+  showing older data", with the error below. Before, the old rows stayed with no sign.
+- The keyboard, with Runners' `keys.js` and `"focusable": true` in `mod.json`: ↑ ↓ (or J K) move,
+  Enter opens (or folds a group), A starts an agent, Shift-A the quick menu, / goes to search, P and I
+  switch tabs, R refreshes, Esc leaves. A click in the list gives the panel the keyboard.
+- A full list's count reads "50+".
+
 ## workspace-status-plus
 
 - The theme wrapper.
