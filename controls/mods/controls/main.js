@@ -12,9 +12,10 @@ const BUTTONS = "tabs-plus.hidden"; // panel buttons the tab bar leaves out (see
 const ROW = 28;
 
 function openMenu() {
-  const { status, panels } = items(layout(), shared(BUTTONS) ?? []);
-  const rows = status.length + panels.length;
-  openOverlay({ mod: "controls", kind: "popup", width: 240, height: Math.min(640, 92 + rows * ROW) });
+  const { status, tabs, panels } = items(layout(), shared(BUTTONS) ?? []);
+  const sections = [status, tabs, panels].filter((l) => l.length > 0).length;
+  const rows = status.length + tabs.length + panels.length;
+  openOverlay({ mod: "controls", kind: "popup", width: 240, height: Math.min(640, 44 + sections * 24 + rows * ROW) });
 }
 
 function row(t, id, text, on, click) {
@@ -25,14 +26,23 @@ function row(t, id, text, on, click) {
     .child(div().min_w(0).truncate().text_color(on ? t.foreground : r.hint).child(text));
 }
 
+// A tab-row button goes with the panel it opens, so no panel stays open that nothing can close.
+function setTabButton(b) {
+  if (!b.on) return run("layout.show", { id: b.id });
+  run("layout.hide", { id: b.id });
+  if (b.panel) run("layout.hide", { id: b.panel });
+}
+
 const heading = (t, text) => div().px(8).pt(6).pb(2).text_size(11).text_color(roles(t, t.popover).hint).child(text);
 
 function menu(t) {
   const buttons = shared(BUTTONS) ?? [];
-  const { status, panels } = items(layout(), buttons);
+  const { status, tabs, panels } = items(layout(), buttons);
   return v_flex().id("controls-menu").size_full().p(6).gap(1).bg(t.popover).text_size(12).text_color(t.foreground).overflow_y_scrollbar()
     .when(status.length > 0, (e) => e.child(heading(t, "Status bar")))
     .children(status.map((s) => row(t, `status-${s.id}`, s.label, s.on, () => run(s.on ? "layout.hide" : "layout.show", { id: s.id }))))
+    .when(tabs.length > 0, (e) => e.child(heading(t, "Tab bar buttons")))
+    .children(tabs.map((b) => row(t, `tab-${b.id}`, b.label, b.on, () => setTabButton(b))))
     .when(panels.length > 0, (e) => e.child(heading(t, "Side panel buttons")))
     .children(panels.map((p) => row(t, `panel-${p.id}`, p.label, p.on, () => setShared(BUTTONS, toggle(buttons, p.id, !p.on)))))
     .child(div().px(8).pt(6).text_size(11).text_color(roles(t, t.popover).hint).child("A hidden block stops its work at the next start."));
