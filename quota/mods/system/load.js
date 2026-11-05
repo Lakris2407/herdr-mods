@@ -111,3 +111,10 @@ export async function readLoad(exec, machine = null) {
   try { return parseLoad(r.stdout); }
   catch (e) { throw r.code !== 0 && r.stderr ? failed() : e; }
 }
+
+// Load is loud only when it stays high: with several agents at work a busy CPU is normal, and a spike
+// is no reason to look. True when each of the last `reads` reads (about 30 s at one read every 3 s)
+// is at `at` percent or more.
+export function sustained(history, at = 80, reads = 10) {
+  return history.length >= reads && history.slice(-reads).every(pct => pct >= at);
+}

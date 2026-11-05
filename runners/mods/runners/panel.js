@@ -34,12 +34,13 @@ export class Panel {
   act(id, el, fn, t, label, role = "link") {
     this.actions.push({ id, fn });
     const on = this.focused && id === this.cur;
-    return this.edge(el, t, on ? readable(t.accent, t.background, 3) : t.background).id(`k-${id}`)
+    return this.edge(el, t, on ? readable(t.accent, this.under, 3) : this.under).id(`k-${id}`)
       .role(role).accessibility_label(label).when(on, (e) => e.aria_active_descendant());
   }
 
   // The same 2px edge around an item the keyboard skips (a free slot), so it lines up with the rest.
-  edge(el, t, color = t.background) {
+  // `this.under` is the surface the item sits on: the panel for the header, a card's fill below it.
+  edge(el, t, color = this.under) {
     return div().rounded(8).border_2().border_color(color).child(el);
   }
 
@@ -57,28 +58,28 @@ export class Panel {
   }
 
   tile(value, hint, t, color) {
-    return v_flex().flex_1().min_w(0).px(10).py(8).gap(2).rounded(8).border_1().border_color(t.border)
+    return v_flex().flex_1().min_w(0).px(10).py(8).gap(2).rounded(8).bg(t.raised)
       .child(div().text_size(20).font_semibold().text_color(color ?? t.foreground).child(value))
-      .child(div().truncate().text_size(10).text_color(ink(t).sub).child(hint));
+      .child(div().truncate().text_size(11).text_color(ink(t, t.raised).sub).child(hint));
   }
 
   card(title, hint, body, t, hintColor) {
-    return v_flex().gap(6).p(10).rounded(8).border_1().border_color(t.border)
+    return v_flex().gap(6).p(10).rounded(8).bg(t.raised)
       .child(h_flex().justify_between().items_center()
         .child(div().font_semibold().text_size(12).child(title))
-        .child(div().text_size(11).text_color(hintColor ?? ink(t).sub).child(hint)))
+        .child(div().text_size(11).text_color(hintColor ?? ink(t, t.raised).sub).child(hint)))
       .child(body);
   }
 
   // The dot claims only what the panel knows: red when a slot is offline, amber ring when ssh fails,
   // green when a slot or ssh answered, a grey ring when nothing has (GitHub hides runners without repo admin).
   dot(m, t) {
-    const c = colors(t), off = m.runners.filter((r) => r.status === "offline").length;
+    const c = colors(t, t.raised), off = m.runners.filter((r) => r.status === "offline").length;
     const known = m.load != null || m.runners.some((r) => r.job || r.status === "online");
     const [fill, ring, tip] = off ? [c.off, null, `${off} slot${off > 1 ? "s" : ""} offline`]
       : m.loadError ? [null, c.wait, `ssh failed: ${m.loadError}`]
       : known ? [c.ok, null, "online"]
-      : [null, ink(t).track, "no status yet: GitHub lists runners only to repo admins"];
+      : [null, ink(t, t.raised).track, "no status yet: GitHub lists runners only to repo admins"];
     return div().id(`dot-${m.name}`).size(8).flex_none().rounded(4).tooltip(tip)
       .when(Boolean(fill), (e) => e.bg(fill)).when(Boolean(ring), (e) => e.border_1().border_color(ring));
   }
@@ -87,12 +88,12 @@ export class Panel {
   // time, branch and keyboard stop; here the bar says what runs where. A slot without status is an empty dashed
   // bar, and the machine says why once.
   slot(r, j, s, t, now) {
-    const c = colors(t), k = ink(t), usual = j && s.typical[jobKey(j)];
+    const c = colors(t, t.raised), k = ink(t, t.raised), usual = j && s.typical[jobKey(j)];
     const pct = j?.started && usual ? Math.min(1, (now - j.started) / usual) : null;
     const text = j ? label(j) : r.status === "offline" ? "offline" : r.status === "unknown" ? "" : "free";
     const unknown = !j && r.status === "unknown";
     const fg = j ? t.accent_foreground : r.status === "offline" ? onFill(c.off, t) : unknown ? k.sub : k.onIdle;
-    const row = h_flex().id(`slot-${r.name}`).gap(6).items_center().text_size(10)
+    const row = h_flex().id(`slot-${r.name}`).gap(6).items_center().text_size(11)
       .when(Boolean(j), (e) => e.cursor_pointer().on_click(() => openJob(j)).tooltip(`${r.name} · ${label(j)} · ${j.branch} · ${runTime(j, s.typical, now)}`))
       .when(!j, (e) => e.tooltip(unknown ? `${r.name}: no status (GitHub needs repo admin to list it)` : `${r.name} · ${r.status === "online" ? "free" : r.status}`))
       .child(div().w(64).flex_none().truncate().text_color(k.sub).child(r.label ?? r.name))
@@ -107,21 +108,22 @@ export class Panel {
   }
 
   machine(m, s, t, now) {
-    const c = colors(t), k = ink(t);
+    const c = colors(t, t.raised), k = ink(t, t.raised);
     const p = m.load != null && m.cores ? m.load / m.cores : 0;
     const jobs = new Map(s.jobs.map((j) => [j.id, j]));
     const unknown = m.runners.filter((r) => !r.job && r.status === "unknown").length;
-    return v_flex().id(`m-${m.name}`).flex_1().flex_basis(150).min_w(150).gap(6).p(10).rounded(8).border_1()
-      .border_color(p >= 0.9 ? c.hot : t.border)
+    // A busy machine's card takes an orange edge; otherwise the edge is the fill, so nothing moves.
+    return v_flex().id(`m-${m.name}`).flex_1().flex_basis(150).min_w(150).gap(6).p(10).rounded(8).bg(t.raised).border_1()
+      .border_color(p >= 0.9 ? c.hot : t.raised)
       .child(h_flex().gap(6).items_center().child(this.dot(m, t))
         .child(div().truncate().font_semibold().child(m.name)))
-      .when(Boolean(m.ssh), (e) => e.child(h_flex().id(`load-${m.name}`).gap(6).items_center().text_size(10)
+      .when(Boolean(m.ssh), (e) => e.child(h_flex().id(`load-${m.name}`).gap(6).items_center().text_size(11)
         .text_color(m.loadError ? c.wait : p >= 0.9 ? c.hot : k.sub).tooltip(m.loadError ? `ssh ${m.ssh}: ${m.loadError}` : `${loadText(m)} · 1-minute load per core`)
-        .child(loadBar(m, t, 56)).child(div().truncate().child(loadText(m)))))
-      .when(Boolean(m.warm) && m.warm !== "none", (e) => e.child(div().id(`warm-${m.name}`).truncate().text_size(10).text_color(k.sub)
+        .child(loadBar(m, t, 56, t.raised)).child(div().truncate().child(loadText(m)))))
+      .when(Boolean(m.warm) && m.warm !== "none", (e) => e.child(div().id(`warm-${m.name}`).truncate().text_size(11).text_color(k.sub)
         .tooltip(`warm: ${m.warm}`).child(`warm: ${m.warm}`)))
       .child(v_flex().gap(1).children(m.runners.map((r) => this.slot(r, r.job ? jobs.get(r.job) : null, s, t, now))))
-      .when(unknown > 0, (e) => e.child(div().id(`unknown-${m.name}`).truncate().text_size(10).text_color(k.sub)
+      .when(unknown > 0, (e) => e.child(div().id(`unknown-${m.name}`).truncate().text_size(11).text_color(k.sub)
         .tooltip("GitHub lists runners only to repo admins; a slot shows its status once it takes a job")
         // Short enough for the narrowest card; the dashed bars show which slots.
         .child("No status: needs repo admin")));
@@ -129,18 +131,18 @@ export class Panel {
 
   // What runs now, oldest first: elapsed against the usual length, with the bar; amber when it runs slow.
   running(s, t, now, tags) {
-    const c = colors(t), k = ink(t), list = running(s);
+    const c = colors(t, t.raised), k = ink(t, t.raised), list = running(s);
     const isSlow = (j) => { const u = s.typical[jobKey(j)]; return Boolean(j.started && u && now - j.started > u * 1.2); };
     const slow = list.filter(isSlow).length;
     return this.card("Running", slow ? `${slow} slow` : "run time / usual", v_flex().gap(1).children(list.map((j) => {
       const sub = [j.runner, j.branch].filter(Boolean).join(" · "), right = runTime(j, s.typical, now);
-      return this.act(`r-${j.id}`, jobRow(`r-${j.id}`, j, { right, rightColor: isSlow(j) ? c.wait : k.sub, sub, typical: s.typical, now, tag: tags }, t),
+      return this.act(`r-${j.id}`, jobRow(`r-${j.id}`, j, { right, rightColor: isSlow(j) ? c.wait : k.sub, sub, typical: s.typical, now, tag: tags, bg: t.raised }, t),
         () => openJob(j), t, `${label(j)} on ${sub}, ${right}${isSlow(j) ? ", slow" : ""}`);
     })), t, slow ? c.wait : null);
   }
 
   finished(s, t, now, tags) {
-    const c = colors(t), k = ink(t), f = finished(s, now, 3600000);
+    const c = colors(t, t.raised), k = ink(t, t.raised), f = finished(s, now, 3600000);
     const bad = f.filter(failed), quiet = f.filter((j) => !failed(j));
     // Passed jobs of one run share a row; each failure keeps its own. A run stays while its latest job is recent.
     const runs = byRun(quiet), rows = [...bad.map((j) => ({ key: `job-${j.id}`, jobs: [j] })), ...runs];
@@ -162,7 +164,7 @@ export class Panel {
       .children(shown.map((row) => {
         const j = merge(row.jobs), [right, color] = mark(j);
         const title = row.jobs.length > 1 ? `${j.workflow} · ${row.jobs.length} jobs` : label(j);
-        return this.act(`f-${row.key}`, jobRow(`f-${row.key}`, j, { right, rightColor: color, sub: sub(j), tag: tags, title }, t), () => openJob(j), t,
+        return this.act(`f-${row.key}`, jobRow(`f-${row.key}`, j, { right, rightColor: color, sub: sub(j), tag: tags, title, bg: t.raised }, t), () => openJob(j), t,
           `${title}, ${right}, ${sub(j)}`);
       }))
       .when(hidden > 0 || this.showAll, (e) => {
@@ -174,7 +176,7 @@ export class Panel {
   }
 
   body(s, t, now) {
-    const sum = summary(s, now), w = waiting(s), c = colors(t), mw = medianWait(s, now);
+    const sum = summary(s, now), w = waiting(s), c = colors(t, t.raised), mw = medianWait(s, now);
     const bad = finished(s, now, 3600000).filter(failed).length, p = problems(s);
     const alarm = readable(p.off ? c.off : c.wait, t.background, 4.5);
     // One repo needs no tag on every row.
@@ -194,7 +196,7 @@ export class Panel {
       .when(w.length > 0, (e) => e.child(this.card("Waiting", `oldest ${duration(sum.longest)}`, v_flex().gap(1).children(
         w.map((j) => {
           const sub = `needs ${j.labels.join(", ")} · ${j.branch}`;
-          return this.act(`w-${j.id}`, jobRow(`w-${j.id}`, j, { right: duration(now - j.created), rightColor: c.wait, sub, tag: tags }, t), () => openJob(j), t,
+          return this.act(`w-${j.id}`, jobRow(`w-${j.id}`, j, { right: duration(now - j.created), rightColor: colors(t, t.raised).wait, sub, tag: tags, bg: t.raised }, t), () => openJob(j), t,
             `${label(j)}, waiting ${duration(now - j.created)}, ${sub}`);
         })), t)))
       .when(running(s).length > 0, (e) => e.child(this.running(s, t, now, tags)))
@@ -215,11 +217,13 @@ export class Panel {
     const t = theme(), s = snapshot(), now = Date.now(), fresh = freshness(s, now);
     this.actions = [];
     this.focused = this.handle.is_focused();
+    this.under = t.background;
     const header = h_flex().h(42).flex_none().px(12).gap(4).items_center().border_b(1).border_color(t.border)
       .child(div().font_semibold().text_size(13).child("Runners"))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(fresh.stale ? colors(t).wait : ink(t).sub).child(fresh.text))
       .child(this.act("runners-lanes", button("runners-lanes", "Timeline", t, () => openLanes()), () => openLanes(), t, "Open the timeline", "button"))
       .child(this.act("runners-refresh", button("runners-refresh", "Refresh", t, () => refresh()), () => refresh(), t, "Refresh now", "button"));
+    this.under = t.raised; // the body's items sit on cards from here on
     const body = v_flex().id("runners-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(8)
       .when(Boolean(s?.error), (e) => e.child(this.error(s, t, now)))
       .when(!s, (e) => e.child(div().p(4).text_color(ink(t).sub).child("Reading the runners…")))
@@ -236,7 +240,7 @@ export class Panel {
       .child(header)
       // The keys, shown only while the panel has the keyboard.
       .when(this.focused, (e) => e.child(div().flex_none().px(12).py(4).border_b(1).border_color(t.border).truncate()
-        .text_size(10).text_color(ink(t).sub).child("↑ ↓ move · Enter opens · R refreshes · T timeline · Esc leaves")))
+        .text_size(11).text_color(ink(t).sub).child("↑ ↓ move · Enter opens · R refreshes · T timeline · Esc leaves")))
       .child(body);
   }
 }

@@ -15,7 +15,7 @@ export class Lanes {
   init() { this.width = 940; }
 
   render() {
-    const t = theme(), s = snapshot(), now = Date.now(), c = colors(t), fresh = freshness(s, now);
+    const t = theme(), s = snapshot(), now = Date.now(), c = colors(t, t.popover), fresh = freshness(s, now);
     const root = v_flex().id("lanes").size_full().bg(t.popover).text_color(t.foreground).text_size(11)
       // Sizes arrive in screen pixels; the layout works in zoomed units.
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } });
@@ -67,17 +67,17 @@ export class Lanes {
         .child(h_flex().w(NAME_W).flex_none().gap(6).items_center().pr(8)
           .child(div().size(7).rounded(4).bg(dot))
           .child(div().truncate().text_color(t.muted).child(r.label ?? r.name))
-          .child(div().truncate().text_size(10).text_color(t.dim).child(r.machine)))
+          .child(div().truncate().text_size(10).text_color(ink(t, t.popover).hint).child(r.machine)))
         .child(track(parts));
     };
 
     const axis = h_flex().pl(NAME_W).child(div().relative().w(W).h(14).children(ticks.map((m) => {
       const left = Math.round(((m * MIN + BACK) / SPAN) * W);
       return div().absolute().left(Math.max(0, left - 14)).top(0).text_size(10)
-        .text_color(m === 0 ? c.run : t.dim).child(m === 0 ? "now" : `${m > 0 ? "+" : "−"}${Math.abs(m)}m`);
+        .text_color(m === 0 ? c.run : ink(t, t.popover).hint).child(m === 0 ? "now" : `${m > 0 ? "+" : "−"}${Math.abs(m)}m`);
     })));
     const swatch = (look, text) => h_flex().gap(6).items_center().child(look(div().w(14).h(9).rounded(2))).child(text);
-    const legend = h_flex().pl(NAME_W).gap(16).flex_wrap().text_color(t.dim)
+    const legend = h_flex().pl(NAME_W).gap(16).flex_wrap().text_color(ink(t, t.popover).hint)
       .child(swatch((e) => e.bg(t.surface).border_l(2).border_color(c.ok), "passed"))
       .child(swatch((e) => e.bg(t.surface).border_l(2).border_color(c.off), "failed"))
       .child(swatch((e) => e.bg(c.run), "running"))

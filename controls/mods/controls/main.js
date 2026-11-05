@@ -6,6 +6,7 @@ import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, layout, run, shared, setShared, openOverlay, props } from "herdr";
 import { items, toggle } from "./controls.js";
+import { roles } from "./colors.js";
 
 const BUTTONS = "tabs-plus.hidden"; // panel buttons the tab bar leaves out (see tabs-plus.md)
 const ROW = 28;
@@ -17,13 +18,14 @@ function openMenu() {
 }
 
 function row(t, id, text, on, click) {
+  const r = roles(t, t.popover);
   return h_flex().id(id).h(ROW).flex_none().px(8).gap(8).items_center().rounded(6).cursor_pointer()
     .hover((s) => s.bg(t.hover)).on_click(click)
     .child(div().w(14).text_color(t.accent).child(on ? "✓" : ""))
-    .child(div().min_w(0).truncate().text_color(on ? t.foreground : t.dim).child(text));
+    .child(div().min_w(0).truncate().text_color(on ? t.foreground : r.hint).child(text));
 }
 
-const heading = (t, text) => div().px(8).pt(6).pb(2).text_size(11).text_color(t.dim).child(text);
+const heading = (t, text) => div().px(8).pt(6).pb(2).text_size(11).text_color(roles(t, t.popover).hint).child(text);
 
 function menu(t) {
   const buttons = shared(BUTTONS) ?? [];
@@ -33,7 +35,7 @@ function menu(t) {
     .children(status.map((s) => row(t, `status-${s.id}`, s.label, s.on, () => run(s.on ? "layout.hide" : "layout.show", { id: s.id }))))
     .when(panels.length > 0, (e) => e.child(heading(t, "Side panel buttons")))
     .children(panels.map((p) => row(t, `panel-${p.id}`, p.label, p.on, () => setShared(BUTTONS, toggle(buttons, p.id, !p.on)))))
-    .child(div().px(8).pt(6).text_size(11).text_color(t.dim).child("A hidden block stops its work at the next start."));
+    .child(div().px(8).pt(6).text_size(11).text_color(roles(t, t.popover).hint).child("A hidden block stops its work at the next start."));
 }
 
 export default class Controls extends View {
@@ -42,7 +44,7 @@ export default class Controls extends View {
     if (props()?.view !== "button") return menu(t);
     return h_flex().id("controls").size_full().items_center().justify_center()
       .child(div().id("controls-button").size(22).flex().items_center().justify_center().rounded(6).cursor_pointer()
-        .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground)).tooltip("Turn mods on or off")
+        .text_color(roles(t, t.chrome).hint).hover((s) => s.bg(t.hover).text_color(t.foreground)).tooltip("Turn mods on or off")
         .on_click(() => openMenu()).child(svg("mods/controls/controls.svg").size(14)));
   }
 }

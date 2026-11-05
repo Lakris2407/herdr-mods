@@ -38,7 +38,8 @@ export function duration(ms) {
   const sec = Math.round(ms / 1000);
   if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
-  if (min < 60) return sec % 60 && min < 10 ? `${min}:${String(sec % 60).padStart(2, "0")}` : `${min}m`;
+  // "7m 53s", not "7:53", which reads as a time of day; the same units as the quota's "2h 5m".
+  if (min < 60) return sec % 60 && min < 10 ? `${min}m ${sec % 60}s` : `${min}m`;
   return `${Math.floor(min / 60)}h ${min % 60}m`;
 }
 

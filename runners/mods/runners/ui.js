@@ -4,14 +4,20 @@ import { h_flex, v_flex } from "gpui-base";
 import { theme, exec, openOverlay } from "herdr";
 import { label, duration, pressure, jobKey } from "./model.js";
 import { snapshot } from "./poll.js";
-import { readable, contrast, flatten } from "./colors.js";
+import { readable, contrast, flatten, roles } from "./colors.js";
 
-export const colors = (t = theme()) => ({ run: t.accent, wait: t.ansi3, off: t.ansi1, ok: t.ansi2, hot: t.ansi11 ?? t.ansi3, idle: t.border });
+// One meaning per color, the same as the other mods (colors.js): amber waits, orange is a busy machine,
+// red is only offline or failed. `bg` is where the color shows.
+export const colors = (t = theme(), bg = t.background) => {
+  const r = roles(t, bg);
+  return { run: t.accent, wait: r.warn, off: r.fail, ok: r.ok, hot: r.hot, idle: t.border };
+};
 
 // Secondary text that stays readable: themes set `dim` for taste, often below 4.5:1.
 // `sub` reads on the view's background, `onIdle` on a free slot's fill, `track` is a bar's empty part.
 export const ink = (t = theme(), bg = t.background) => ({
   sub: readable(t.muted, bg, 4.5),
+  hint: readable(t.dim, bg, 4.5),
   onIdle: readable(t.muted, flatten(t.border, bg), 4.5),
   track: readable(flatten(t.dim, bg), bg, 3),
 });
@@ -45,8 +51,9 @@ export function openJob(j) {
 }
 
 export function repoTag(j, t) {
+  const fill = flatten(t.border, t.background);
   return div().w(34).flex_none().py(1).rounded(4).bg(t.border).text_center().text_size(10).font_semibold()
-    .text_color(t[j.color] ?? t.foreground).child(j.short);
+    .text_color(readable(t[j.color] ?? t.foreground, fill, 4.5)).child(j.short);
 }
 
 export function slotColor(r, t) {
@@ -62,10 +69,11 @@ export function squares(list, t) {
       .tooltip(`${r.name} · ${r.job ? "running" : r.status === "online" ? "idle" : r.status}`)));
 }
 
-export function loadBar(m, t, width = 60) {
-  const p = pressure(m), c = colors(t);
-  const color = p == null ? t.border : p >= 1.5 ? c.off : p >= 0.9 ? c.hot : p >= 0.6 ? c.wait : c.ok;
-  return div().w(width).h(5).rounded(3).bg(ink(t).track).overflow_hidden()
+export function loadBar(m, t, width = 60, bg = t.background) {
+  const p = pressure(m), c = colors(t, bg);
+  // A busy machine is orange however busy: red stays for offline, and the text gives the number.
+  const color = p == null ? t.border : p >= 0.9 ? c.hot : c.ok;
+  return div().w(width).h(5).rounded(3).bg(ink(t, bg).track).overflow_hidden()
     .child(div().h_full().rounded(3).bg(color).w(Math.round(width * Math.min(1, p ?? 0))));
 }
 
@@ -78,7 +86,9 @@ export function loadText(m) {
 
 // One job: repo tag, what and where, and a time on the right. `bar` adds progress against the usual length.
 // `tag: false` drops the repo tag, for a setup that watches one repo; `title` replaces the job's label.
-export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true, title }, t) {
+// `bg` is the surface the row sits on, so its secondary text is lifted for that surface.
+export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true, title, bg = t.background }, t) {
+  const k = ink(t, bg);
   const usual = typical?.[jobKey(j)];
   const pct = j.started && usual ? Math.min(1, (now - j.started) / usual) : null;
   // Past 1.2x its usual length, the bar turns amber: this run is slow, not almost done.
@@ -88,10 +98,10 @@ export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true
     .when(tag, (e) => e.child(repoTag(j, t)))
     .child(v_flex().flex_1().min_w(0).gap(2)
       .child(div().truncate().text_color(t.foreground).child(title ?? label(j)))
-      .child(div().truncate().text_size(11).text_color(ink(t).sub).child(sub))
-      .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(ink(t).track).overflow_hidden()
-        .child(div().h_full().bg(slow ? t.ansi3 : t.accent).w(`${Math.round(pct * 100)}%`)))))
-    .child(div().flex_none().text_size(11).text_color(rightColor ?? t.muted).child(right));
+      .child(div().truncate().text_size(11).text_color(k.sub).child(sub))
+      .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(k.track).overflow_hidden()
+        .child(div().h_full().bg(slow ? colors(t, bg).wait : t.accent).w(`${Math.round(pct * 100)}%`)))))
+    .child(div().flex_none().text_size(11).text_color(rightColor ?? k.sub).child(right));
 }
 
 export const runTime = (j, typical, now) => {
@@ -99,9 +109,10 @@ export const runTime = (j, typical, now) => {
   return usual ? `${duration(now - j.started)} / ~${duration(usual)}` : duration(now - j.started);
 };
 
+// The same button as the Stats panel's: a raised fill, no edge.
 export function button(id, text, t, onClick) {
-  return div().id(id).px(8).h(24).flex().items_center().rounded(6).cursor_pointer().text_size(11).text_color(t.muted)
-    .border_1().border_color(t.border).hover((e) => e.bg(t.hover)).on_click(onClick).child(text);
+  return div().id(id).px(8).h(24).flex().items_center().rounded(6).cursor_pointer().text_size(11)
+    .bg(t.raised).text_color(readable(t.muted, t.raised, 4.5)).hover((e) => e.bg(t.hover)).on_click(onClick).child(text);
 }
 
 export function groupTitle(left, right, t) {

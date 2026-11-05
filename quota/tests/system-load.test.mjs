@@ -109,3 +109,11 @@ test("output that is not the script's is an error, never a 0% reading", async ()
     readLoad(async () => ({ code: 255, stdout: "Last login: Mon\n", stderr: "hub: connection closed\n" }), "hub"),
     /^Error: hub: connection closed$/);
 });
+
+test("load is loud only when it stays high", async () => {
+  const { sustained } = await import("../mods/system/load.js");
+  assert.equal(sustained([99, 99, 99]), false, "too few reads");
+  assert.equal(sustained(Array(10).fill(95)), true);
+  assert.equal(sustained([...Array(9).fill(95), 40]), false, "it dropped");
+  assert.equal(sustained([20, 20, ...Array(10).fill(85)]), true, "only the last reads count");
+});

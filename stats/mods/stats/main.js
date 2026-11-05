@@ -7,7 +7,7 @@ import { theme, exec, run, shared, setShared, nextCommand, layout, props as bloc
 import { loadRaw } from "./load.js";
 import { demoRaw } from "./demo.js";
 import { buildStats, duration, change, plainError, TIME_WORDS, STALE_PR_DAYS, num, compact } from "./stats.js";
-import { readable, isLight } from "./colors.js";
+import { readable, isLight, roles } from "./colors.js";
 
 // A minute's tick keeps "updated 5m ago" true and reloads once the numbers are 30 minutes old.
 const CACHE = "stats.v4", STALE = 30 * 60000, TICK = 60000;
@@ -61,15 +61,18 @@ function leaveSide() {
 
 // The theme's own colors, lifted only where a theme sets them below a readable contrast on the cards:
 // labels at 6:1, hints and verdict colors at 4.5:1 (all of this text is 10–12px), and marks (bars,
-// the AI split, the focus ring) at 3:1, the floor for non-text UI.
+// the AI split, the focus ring) at 3:1, the floor for non-text UI. Verdicts take the shared scale
+// (colors.js): a slower week is amber, not red, because red is only for what failed.
 function inks(t) {
+  const card = roles(t, t.raised), top = roles(t, t.background);
   return {
     label: readable(t.muted, t.raised, 6),
     hint: readable(t.dim, t.raised, 4.5),
-    good: readable(t.ansi2, t.raised, 4.5),
-    bad: readable(t.ansi1, t.raised, 4.5),
-    header: readable(t.dim, t.background, 4.5),
-    headerWarn: readable(t.ansi3, t.background, 4.5),
+    good: card.ok,
+    bad: card.warn,
+    header: top.hint,
+    headerWarn: top.warn,
+    fail: top.fail,
     button: readable(t.muted, t.raised, 6),
     bar: readable(t.accent, t.raised, 3),
     ghost: readable(t.accent, t.raised, 5),
@@ -391,7 +394,7 @@ export default class Stats extends View {
       { label: this.loading ? "Refreshing" : "Refresh now", role: "button" })
       .disabled(Boolean(this.loading)).tooltip("Refresh now (R when the panel has the keyboard)").child("Refresh");
     const body = v_flex().id("stats-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(10)
-      .when(Boolean(this.error), (e) => e.child(div().px(2).text_size(11).text_color(s ? ink.headerWarn : readable(t.ansi1, t.background, 4.5)).child(this.error)))
+      .when(Boolean(this.error), (e) => e.child(div().px(2).text_size(11).text_color(s ? ink.headerWarn : ink.fail).child(this.error)))
       .when(!s && !this.error, (e) => e.child(div().p(4).text_color(ink.header).child("Loading your numbers from GitHub… the first load takes about 15 seconds.")))
       .when(Boolean(s), (e) => e.child(this.body(s, t, ink)));
     this.at = Math.min(this.at, Math.max(0, this.actions.length - 1));

@@ -15,6 +15,8 @@ for folder in "${folders[@]}"; do
   [ -d "$REPO_DIR/$folder/mods" ] || { echo "no mods in $folder" >&2; exit 1; }
   for mod in "$REPO_DIR/$folder"/mods/*/; do
     name="$(basename "$mod")"
+    # Every mod with a colors.js gets the one in shared/, so a color means the same in each.
+    [ -f "$mod/colors.js" ] && cp "$REPO_DIR/shared/colors.js" "$mod/colors.js"
     mkdir -p "$APP_HOME/mods/$name"
     # Herdr writes jsconfig.json and gpui-kit.d.ts into each mod folder; keep them.
     rsync -a --delete --exclude jsconfig.json --exclude gpui-kit.d.ts "$mod" "$APP_HOME/mods/$name/"

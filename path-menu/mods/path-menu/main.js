@@ -9,6 +9,7 @@ import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { run, props, closeOverlay, openOverlay, theme, keys, terminals, spaces, panes, exec, window } from "herdr";
 import { pathsOnScreen } from "./paths.js";
+import { roles } from "./colors.js";
 
 // Where a space is now: its first terminal's live folder, else where it was made.
 function place(s) {
@@ -163,7 +164,7 @@ export default class Menu extends View {
         else return;
         cx.notify();
       })
-      .when(list[0]?.[1] === "open", (el) => el.child(div().px(8).pt(4).pb(5).text_size(11).text_color(t.dim).child("On screen")))
+      .when(list[0]?.[1] === "open", (el) => el.child(div().px(8).pt(4).pb(5).text_size(11).text_color(roles(t, t.popover).hint).child("On screen")))
       .children(
         list.map((it, i) =>
           v_flex()
@@ -183,14 +184,14 @@ export default class Menu extends View {
               .on_click((_e, cx) => this.choose(i, cx))
               .child(svg(menuIcon(it[1], it[2])).size(14).flex_none().text_color(t.muted))
               .child(div().flex_1().child(it[0]))
-              .child(div().text_size(11).text_color(t.dim).child(shortcut(it[1], it[2]))))
+              .child(div().text_size(11).text_color(roles(t, t.popover).hint).child(shortcut(it[1], it[2]))))
             // A path row: the name opens it, the button beside it shows it in its folder.
             .when(it[1] === "open", (el) => el
               .child(h_flex().id(`open-${i}`).flex_1().min_w(0).h_full().gap(9).items_center().tooltip(it[2].path)
                 .on_click((_e, cx) => this.choose(i, cx))
                 .child(svg(menuIcon(it[1], it[2])).size(14).flex_none().text_color(t.muted))
                 .child(div().flex_1().min_w(0).truncate().child(it[0])))
-              .child(div().id(`reveal-${i}`).flex_none().px(6).py(2).rounded(5).text_size(11).text_color(t.dim).hover((s) => s.bg(t.raised).text_color(t.foreground))
+              .child(div().id(`reveal-${i}`).flex_none().px(6).py(2).rounded(5).text_size(11).text_color(roles(t, t.popover).hint).hover((s) => s.bg(t.raised).text_color(t.foreground))
                 .on_click(() => { closeOverlay(props()?.overlay); openPath(it[2], true); })
                 .child(window()?.platform === "macos" ? "Finder" : "Folder")))),
         ),
