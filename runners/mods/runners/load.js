@@ -32,7 +32,7 @@ const time = (s) => (s ? Date.parse(s) : null);
 
 function job(repo, r, j) {
   return {
-    id: j.id, repo: repo.repo, short: repo.short, color: repo.color,
+    id: j.id, run: r.id, repo: repo.repo, short: repo.short, color: repo.color,
     workflow: r.workflow, title: r.title, branch: r.branch, name: j.name,
     status: j.status, conclusion: j.conclusion, labels: j.labels ?? [], runner: j.runner || null,
     created: time(j.created), started: time(j.started), completed: time(j.completed), url: j.url,

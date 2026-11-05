@@ -11,20 +11,22 @@ GitHub Actions runners and any machine you can reach over ssh.
   red = offline), and how many jobs wait. Click it to open or close the Runners panel; right-click
   it for a quick-look popup. On a narrow status bar it drops the title, then the squares, so the
   counts always show.
-- **Panel** beside Files and Changes: totals (waiting, failed in the last hour, busy slots, today's
-  wait), the waiting jobs (oldest first, only when some wait), each machine with its load and slots,
-  and the finished jobs. Failures stay listed for the hour; passed jobs drop off after 10 minutes
-  (`Show N older` brings them back). Each running slot shows how long its job has run, with a line
-  for its progress against the usual length (amber past 1.2x). A machine's dot is green only when a
-  slot or ssh answered; a grey ring means no status yet. When a read fails, the header says how old
-  the data is.
+- **Panel** beside Files and Changes: a line that names what needs a look (a slot offline, a
+  machine ssh can't read), only when something does; totals (waiting, failed in the last hour, busy
+  slots, today's wait); the waiting jobs (oldest first, only when some wait); the running jobs, each
+  with how long it has run against its usual length and a bar for its progress (amber past 1.2x);
+  each machine with its load and a bar per slot naming its job; and the finished jobs. Passed jobs
+  of one run share a row (`CI · 3 jobs`); failures stay listed for the hour, one row each; passed
+  jobs drop off after 10 minutes (`Show N older` brings them back). A machine's dot is green only
+  when a slot or ssh answered; a grey ring means no status yet. The header turns amber when a read
+  fails or no read came for 3 minutes, and says how old the data is.
 - **Timeline**, a window you open from the panel or the popup: a lane per slot over the last 30
   minutes and the next 10. Waiting jobs sit where the first free slot of their pool should take them,
   from how long each job usually takes.
 - **Toasts** when a job waits longer than `waitAlertMinutes`, and when a slot goes offline.
 - Click a GitHub job to open it on GitHub; click a lanes job to open its log folder.
 - **Keyboard:** `pane.go` moves onto the panel like onto a pane. `↑` `↓` walk everything you can
-  click (the buttons, waiting jobs, running slots, finished jobs, `Show N older`) with a 2px ring,
+  click (the buttons, waiting jobs, running jobs, finished jobs, `Show N older`) with a 2px ring,
   `Enter` or `Space` opens it, `R` refreshes, `T` opens the timeline, and `Esc` goes back toward the
   terminals. On the status-bar chip, `Enter` shows the panel and `Space` the quick look.
 
@@ -37,8 +39,8 @@ GitHub Actions runners and any machine you can reach over ssh.
 - **GitHub Actions self-hosted runners**, through `gh api`: the recent runs of each repo you list
   and the jobs of every run that is active or finished in the last two hours. A job is watched when
   it asks for `self-hosted` or one of your `labels`, or runs on a runner you list. Online and busy
-  come from `actions/runners`; that endpoint needs repo admin, so without it a slot shows `idle?`
-  until a job runs on it.
+  come from `actions/runners`; that endpoint needs repo admin, so without it a slot shows an empty
+  dashed bar, and its machine says `needs repo admin`, until a job runs on it.
 - **Machine load** over ssh: `sysctl -n vm.loadavg hw.ncpu` (macOS), the 1-minute load per core.
 - **A lock-based job runner of your own (optional):** a script that runs jobs on your machines
   with a lock per lane, read through its `status` command and a history file. See

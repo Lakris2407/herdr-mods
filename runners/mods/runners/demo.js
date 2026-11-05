@@ -8,8 +8,8 @@ const REPOS = {
 const BRANCHES = ["main", "feat/checkout", "fix/login-flicker", "feat/level-7", "chore/deps"];
 
 let seq = 0;
-function job(r, workflow, name, runner, status, { created, started, completed, conclusion = "success", branch } = {}) {
-  return { id: `demo-${++seq}`, ...REPOS[r], workflow, name, title: "", branch: branch ?? BRANCHES[seq % BRANCHES.length],
+function job(r, workflow, name, runner, status, { created, started, completed, conclusion = "success", branch, run } = {}) {
+  return { id: `demo-${++seq}`, run, ...REPOS[r], workflow, name, title: "", branch: branch ?? BRANCHES[seq % BRANCHES.length],
     labels: [`${r}-ci`], runner, status, conclusion: status === "completed" ? conclusion : null,
     created, started, completed, url: `https://github.com/${REPOS[r].repo}/actions` };
 }
@@ -31,9 +31,12 @@ export function demoSnapshot(now) {
     ["game", "sim", "pace", "mini-1 core", 29, 14], ["game", "sim", "pace", "mini-2 core", 12, 4],
     ["web", "CI", "e2e", "web-mini-1", 25, 16], ["web", "CI", "e2e", "web-mini-2", 20, 11], ["web", "CI", "e2e", "web-mini-1", 10, 4],
     ["api", "CI", "integration", "api-mini-2", 24, 13], ["api", "CI", "integration", "api-mini-1", 9, 1, "failure"],
+    // One run with three jobs that passed: the panel shows it as one row.
+    ["web", "CI", "lint", "web-mini-2", 9, 7, "success", 41], ["web", "CI", "unit", "web-mini-2", 7, 4, "success", 41],
+    ["web", "CI", "build", "web-mini-2", 4, 3, "success", 41],
   ];
-  for (const [r, wf, name, runner, from, to, conclusion] of done) {
-    jobs.push(job(r, wf, name, runner, "completed", { created: ago(from + 1), started: ago(from), completed: ago(to), conclusion }));
+  for (const [r, wf, name, runner, from, to, conclusion, run] of done) {
+    jobs.push(job(r, wf, name, runner, "completed", { created: ago(from + 1), started: ago(from), completed: ago(to), conclusion, run }));
   }
   const busy = new Map(jobs.filter((j) => j.status === "in_progress").map((j) => [j.runner, j.id]));
   const slot = (name, label) => ({ name, label, status: "online", job: busy.get(name) ?? null });
