@@ -46,8 +46,19 @@ export function contrast(a, b) {
 export const isLight = (bg) => { const b = parse(bg); return Boolean(b) && luminance(b) >= 0.5; };
 
 // `fg` itself when it reaches `min` on `bg`; otherwise the least lift toward white (dark `bg`) or
-// black (light `bg`) that does. Colors it cannot read come back unchanged.
+// black (light `bg`) that does. Colors it cannot read come back unchanged. Views ask for the same few
+// pairs on every render, so each answer is kept (a theme has a few dozen pairs).
+const seen = new Map();
 export function readable(fg, bg, min) {
+  const key = `${fg}|${bg}|${min}`;
+  if (seen.has(key)) return seen.get(key);
+  if (seen.size > 500) seen.clear();
+  const out = lift(fg, bg, min);
+  seen.set(key, out);
+  return out;
+}
+
+function lift(fg, bg, min) {
   const p = parse(fg), b = parse(bg);
   if (!p || !b || contrast(fg, bg) >= min) return fg;
   const f = over(p, b); // a see-through color is lifted from what it shows as, and comes back opaque

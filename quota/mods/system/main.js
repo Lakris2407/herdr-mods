@@ -122,7 +122,7 @@ export default class System extends View {
         .child(div().min_w(26).text_size(11).text_color(color ?? r.sub).child(m ? `${Math.round(m.pct)}%` : "–"));
     };
     return h_flex().id("system").size_full().px(graphs ? 12 : 8).gap(graphs ? 12 : 8).items_center().justify_end().overflow_hidden()
-      .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(r.sub)
+      .bg(t.chrome).border_t(1).border_color(t.border).text_size(11.8).text_color(r.sub)
       .on_size_change((size, cx) => { const w = size.width / (settings().zoom || 1); if (w !== this.width) { this.width = w; cx.notify(); } })
       // Activity Monitor only makes sense for this Mac.
       .when(!machine, el => el.cursor_pointer().on_click(() => monitor()).role("button"))

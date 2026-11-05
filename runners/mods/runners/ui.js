@@ -69,11 +69,11 @@ export function squares(list, t) {
       .tooltip(`${r.name} · ${r.job ? "running" : r.status === "online" ? "idle" : r.status}`)));
 }
 
-export function loadBar(m, t, width = 60) {
-  const p = pressure(m), c = colors(t);
+export function loadBar(m, t, width = 60, bg = t.background) {
+  const p = pressure(m), c = colors(t, bg);
   // A busy machine is orange however busy: red stays for offline, and the text gives the number.
   const color = p == null ? t.border : p >= 0.9 ? c.hot : c.ok;
-  return div().w(width).h(5).rounded(3).bg(ink(t).track).overflow_hidden()
+  return div().w(width).h(5).rounded(3).bg(ink(t, bg).track).overflow_hidden()
     .child(div().h_full().rounded(3).bg(color).w(Math.round(width * Math.min(1, p ?? 0))));
 }
 
@@ -86,7 +86,9 @@ export function loadText(m) {
 
 // One job: repo tag, what and where, and a time on the right. `bar` adds progress against the usual length.
 // `tag: false` drops the repo tag, for a setup that watches one repo; `title` replaces the job's label.
-export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true, title }, t) {
+// `bg` is the surface the row sits on, so its secondary text is lifted for that surface.
+export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true, title, bg = t.background }, t) {
+  const k = ink(t, bg);
   const usual = typical?.[jobKey(j)];
   const pct = j.started && usual ? Math.min(1, (now - j.started) / usual) : null;
   // Past 1.2x its usual length, the bar turns amber: this run is slow, not almost done.
@@ -96,10 +98,10 @@ export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true
     .when(tag, (e) => e.child(repoTag(j, t)))
     .child(v_flex().flex_1().min_w(0).gap(2)
       .child(div().truncate().text_color(t.foreground).child(title ?? label(j)))
-      .child(div().truncate().text_size(11).text_color(ink(t).sub).child(sub))
-      .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(ink(t).track).overflow_hidden()
-        .child(div().h_full().bg(slow ? colors(t).wait : t.accent).w(`${Math.round(pct * 100)}%`)))))
-    .child(div().flex_none().text_size(11).text_color(rightColor ?? t.muted).child(right));
+      .child(div().truncate().text_size(11).text_color(k.sub).child(sub))
+      .when(pct != null, (e) => e.child(div().h(3).w_full().rounded(2).bg(k.track).overflow_hidden()
+        .child(div().h_full().bg(slow ? colors(t, bg).wait : t.accent).w(`${Math.round(pct * 100)}%`)))))
+    .child(div().flex_none().text_size(11).text_color(rightColor ?? k.sub).child(right));
 }
 
 export const runTime = (j, typical, now) => {
@@ -107,9 +109,10 @@ export const runTime = (j, typical, now) => {
   return usual ? `${duration(now - j.started)} / ~${duration(usual)}` : duration(now - j.started);
 };
 
+// The same button as the Stats panel's: a raised fill, no edge.
 export function button(id, text, t, onClick) {
-  return div().id(id).px(8).h(24).flex().items_center().rounded(6).cursor_pointer().text_size(11).text_color(t.muted)
-    .border_1().border_color(t.border).hover((e) => e.bg(t.hover)).on_click(onClick).child(text);
+  return div().id(id).px(8).h(24).flex().items_center().rounded(6).cursor_pointer().text_size(11)
+    .bg(t.raised).text_color(readable(t.muted, t.raised, 4.5)).hover((e) => e.bg(t.hover)).on_click(onClick).child(text);
 }
 
 export function groupTitle(left, right, t) {
