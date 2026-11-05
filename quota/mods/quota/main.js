@@ -188,7 +188,7 @@ export default class Quota extends View {
             .when(labels, el => el.child(div().text_size(11).text_color(r.hint).child(short(w, windows.filter(x => x.kind === w.kind).length > 1))))
             .when(barW > 0, el => el.child(bar(w, barW, 4, now, t, o.remaining, r)))
             .child(div().min_w(24).text_size(11).text_color(w.percentUsed >= 60 ? level(w.percentUsed, r) : r.sub).child(`${Math.round(percent(w, o.remaining))}%`))
-            .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(8).text_color(level(Math.max(60, w.percentUsed), r)).child("▲")));
+            .when(Boolean(pc?.ahead), el => el.child(div().ml(-3).text_size(10).text_color(level(Math.max(60, w.percentUsed), r)).child("▲")));
         })));
     });
     return h_flex().id("quota").size_full().px(labels ? 12 : 8).gap(labels ? 11 : 7).items_center().justify_end().overflow_hidden()

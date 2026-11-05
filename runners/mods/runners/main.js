@@ -4,7 +4,7 @@
 import { View } from "gpui-kit";
 import { props, nextCommand } from "herdr";
 import { tick, refresh, snapshot } from "./poll.js";
-import { openLanes } from "./ui.js";
+import { openLanes, showPanel } from "./ui.js";
 import { Chip } from "./chip.js";
 import { Popup } from "./popup.js";
 import { Panel } from "./panel.js";
@@ -29,6 +29,8 @@ export default class Runners extends View {
         const c = await nextCommand();
         if (c === "refresh") refresh();
         if (c === "timeline") openLanes();
+        // An offline toast's click: the Runners panel, shown (never toggled away).
+        if (c === "panel") showPanel();
         // "focusable" in mod.json: pane.go hands this copy the keyboard (again after a popup over it closes).
         if (c === "focus") this.view.focus?.();
         tick(cx);

@@ -175,3 +175,39 @@ test("finished jobs of one run with one outcome share a row; lanes jobs stay sin
   assert.deepEqual(rows.map((r) => r.jobs.map((j) => j.id)), [[1, 2, 5], [3], [4], [6]]);
   assert.deepEqual(rows.map((r) => r.key), ["o/w#9:success", "o/w#9:cancelled", "job-4", "o/w#8:success"]);
 });
+
+test("the chip's counts carry their nouns", () => {
+  assert.deepEqual(model.chipWords({ waiting: 4, busy: 7, total: 12 }, 1), { state: "4 jobs waiting", offline: "1 runner offline" });
+  assert.deepEqual(model.chipWords({ waiting: 1, busy: 2, total: 12 }, 2), { state: "1 job waiting", offline: "2 runners offline" });
+  assert.deepEqual(model.chipWords({ waiting: 0, busy: 3, total: 12 }), { state: "3 jobs running", offline: "" });
+  assert.deepEqual(model.chipWords({ waiting: 0, busy: 0, total: 12 }), { state: "runners idle", offline: "" });
+  assert.deepEqual(model.chipWords({ waiting: 0, busy: 0, total: 12 }, 2), { state: "", offline: "2 runners offline" });
+});
+
+test("an offline slot speaks after a minute, once per machine, and again when all are back", () => {
+  const m = (a, b) => [{ name: "Claws mini", runners: [{ name: "core", status: a }, { name: "unity", status: b }] }];
+  let r = model.offlineNews(undefined, m("offline", "offline"), 0);
+  assert.deepEqual(r.posts, []);
+  // A flap: back before the minute, nothing said.
+  r = model.offlineNews(r.state, m("online", "offline"), 30000);
+  assert.deepEqual(r.posts, []);
+  r = model.offlineNews(r.state, m("offline", "offline"), 40000);
+  r = model.offlineNews(r.state, m("offline", "offline"), 61000);
+  assert.deepEqual(r.posts, [{ kind: "off", machine: "Claws mini", names: ["unity"] }]);
+  r = model.offlineNews(r.state, m("offline", "offline"), 101000);
+  assert.deepEqual(r.posts, [{ kind: "off", machine: "Claws mini", names: ["core"] }]);
+  r = model.offlineNews(r.state, m("offline", "offline"), 200000);
+  assert.deepEqual(r.posts, []);
+  r = model.offlineNews(r.state, m("online", "offline"), 210000);
+  assert.deepEqual(r.posts, []);
+  r = model.offlineNews(r.state, m("online", "online"), 220000);
+  assert.deepEqual(r.posts, [{ kind: "back", machine: "Claws mini", names: ["unity"] }]);
+});
+
+test("two slots of one machine share one toast", () => {
+  const m = [{ name: "Claws mini", runners: [{ name: "core", status: "offline" }, { name: "unity", status: "offline" }] }];
+  const r = model.offlineNews(model.offlineNews(undefined, m, 0).state, m, 60000);
+  assert.deepEqual(r.posts, [{ kind: "off", machine: "Claws mini", names: ["core", "unity"] }]);
+  assert.equal(model.offlineToast(r.posts[0]).title, "2 runners on Claws mini are offline");
+  assert.equal(model.offlineToast({ kind: "off", machine: "Claws mini", names: ["core"] }).body, "Claws mini · jobs wait for another slot · open Runners");
+});

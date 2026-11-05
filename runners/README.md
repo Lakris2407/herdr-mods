@@ -8,9 +8,10 @@ GitHub Actions runners and any machine you can reach over ssh.
 ![Runners panel](preview.png)
 
 - **Status-bar chip:** a square per runner slot, grouped per machine (accent = running, grey = free,
-  red = offline), and how many jobs wait. Click it to open or close the Runners panel; right-click
-  it for a quick-look popup. On a narrow status bar it drops the title, then the squares, so the
-  counts always show.
+  red = offline), and what the slots do in words with their nouns: "2 jobs waiting", "3 jobs
+  running", "1 runner offline", so a count never reads as agents waiting on you. Click it to open or
+  close the Runners panel; right-click it for a quick-look popup. On a narrow status bar it drops the
+  title, then the squares, so the words always show.
 - **Panel** beside Files and Changes: a line that names what needs a look (a slot offline, a
   machine ssh can't read), only when something does; totals (waiting, failed in the last hour, busy
   slots, today's wait); the waiting jobs (oldest first, only when some wait); the running jobs, each
@@ -23,7 +24,10 @@ GitHub Actions runners and any machine you can reach over ssh.
 - **Timeline**, a window you open from the panel or the popup: a lane per slot over the last 30
   minutes and the next 10. Waiting jobs sit where the first free slot of their pool should take them,
   from how long each job usually takes.
-- **Toasts** when a job waits longer than `waitAlertMinutes`, and when a slot goes offline.
+- **Toasts** when a job waits longer than `waitAlertMinutes`, and when a slot stays offline for a
+  minute: one toast per machine, not per slot, and a short one when they are all back. A slot that
+  drops and comes back within the minute says nothing. Click an offline toast to open the panel
+  (the `runners.panel` command).
 - Click a GitHub job to open it on GitHub; click a lanes job to open its log folder.
 - **Keyboard:** `pane.go` moves onto the panel like onto a pane. `↑` `↓` walk everything you can
   click (the buttons, waiting jobs, running jobs, finished jobs, `Show N older`) with a 2px ring,
@@ -71,7 +75,7 @@ after the [one-time setup](../README.md#one-time-setup):
 
    ```json
    { "id": "status-runners", "type": "block", "content": { "mod": "runners", "props": { "view": "chip" } },
-     "size": { "weight": 3.0 }, "min": 120 }
+     "size": { "weight": 2.8 }, "min": 120 }
    ```
 
 3. Give the panel a tab-bar button, as in the [one-time setup](../README.md#one-time-setup):

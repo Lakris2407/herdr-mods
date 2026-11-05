@@ -6,7 +6,7 @@ import { loadConfig } from "./config.js";
 import { loadJobs, machineLoad } from "./load.js";
 import { loadLanes } from "./lanesource.js";
 import { demoSnapshot } from "./demo.js";
-import { jobKey, median, label } from "./model.js";
+import { jobKey, median, label, offlineNews, offlineToast } from "./model.js";
 
 export const KEY = "runners.v1";
 const LOCK = "runners.lock", REFRESH = "runners.refresh";
@@ -98,8 +98,13 @@ function announce(prev, next, now) {
     next.alerted.push(j.id);
     notify({ title: `Waiting ${Math.round((now - j.created) / 60000)}m for a runner`, body: `${j.short} · ${label(j)} · ${j.branch} · needs ${j.labels.join(", ")}`, level: "warning", timeout: 10000 });
   }
-  const was = new Map(prev.machines.flatMap((m) => m.runners.map((r) => [r.name, r.status])));
-  for (const m of next.machines) for (const r of m.runners) {
-    if (r.status === "offline" && was.get(r.name) === "online") notify({ title: `${r.name} went offline`, body: `${m.name} · its jobs wait for another slot`, level: "error" });
+  // A failed read keeps the last machines: it says nothing about who is offline.
+  if (next.errorAt && next.at !== now) { next.offline = prev.offline; return; }
+  const news = offlineNews(prev.offline, next.machines, now);
+  next.offline = news.state;
+  for (const p of news.posts) {
+    const words = offlineToast(p);
+    notify({ ...words, level: p.kind === "off" ? "error" : "success", timeout: p.kind === "off" ? 20000 : 6000,
+      action: { name: "runners.panel" } });
   }
 }

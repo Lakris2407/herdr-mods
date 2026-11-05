@@ -1,7 +1,7 @@
 // Pieces every view shares: repo tag, job row, slot squares, load bar.
 import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, exec, openOverlay } from "herdr";
+import { theme, exec, openOverlay, layout, run } from "herdr";
 import { label, duration, pressure, jobKey } from "./model.js";
 import { snapshot } from "./poll.js";
 import { readable, contrast, flatten, roles } from "./colors.js";
@@ -30,6 +30,15 @@ export const onFill = (fill, t) => {
 
 // How old the data is lives with the other pure rules; every view reads it from here.
 export { freshness } from "./model.js";
+
+// Show the Runners panel in the side panel stack (the popup when the layout has none).
+export function showPanel() {
+  const find = (node, id) => node?.id === id ? node : (node?.children ?? []).reduce((f, c) => f ?? find(c, id), null);
+  const root = layout();
+  if (!find(find(root, "panel-body"), "runners")) return openOverlay({ mod: "runners", kind: "popup", width: 420, height: 480, props: { view: "popup" } });
+  run("layout.select", { stack: "panel-body", child: "runners" });
+  run("layout.show", { id: "panel" });
+}
 
 // The timeline is a window you open, never part of the layout.
 export function openLanes() {
@@ -61,11 +70,13 @@ export function slotColor(r, t) {
   return r.job ? c.run : r.status === "offline" ? c.off : c.idle;
 }
 
-// The status bar squares: one per slot.
-export function squares(list, t) {
+// The status bar squares: one per slot. A free slot takes the track grey (3:1 on `bg`), not the
+// border, which was 1.3:1 and read as no slot at all; an unknown one is outlined in it.
+export function squares(list, t, bg = t.background) {
+  const track = ink(t, bg).track;
   return h_flex().gap(2).items_center().children(list.map((r) =>
-    div().id(`sq-${r.name}`).w(6).h(12).rounded(2).bg(slotColor(r, t))
-      .when(r.status === "unknown" && !r.job, (e) => e.bg(t.surface).border_1().border_color(t.border))
+    div().id(`sq-${r.name}`).w(6).h(12).rounded(2).bg(r.job || r.status === "offline" ? slotColor(r, t) : track)
+      .when(r.status === "unknown" && !r.job, (e) => e.bg(bg).border_1().border_color(track))
       .tooltip(`${r.name} · ${r.job ? "running" : r.status === "online" ? "idle" : r.status}`)));
 }
 
