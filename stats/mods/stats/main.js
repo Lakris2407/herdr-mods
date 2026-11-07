@@ -10,7 +10,7 @@ import { buildStats, duration, change, plainError, TIME_WORDS, STALE_PR_DAYS, nu
 import { readable, isLight, roles } from "./colors.js";
 
 // A minute's tick keeps "updated 5m ago" true and reloads once the numbers are 30 minutes old.
-const CACHE = "stats.v4", STALE = 30 * 60000, TICK = 60000;
+const CACHE = "stats.v5", STALE = 30 * 60000, TICK = 60000;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // Claude and Codex differ in lightness as well as hue, so the split still reads without color vision:
 // a dark orange and, on a dark card, a light blue (a dark blue on a light card).
@@ -232,6 +232,7 @@ export default class Stats extends View {
         .child(h_flex().gap(6).items_end()
           .child(div().text_size(30).line_height(1.05).font_semibold().child(num(s.mergedThisWeek)))
           .child(div().pb(3).text_size(12).text_color(ink.label).child(s.mergedThisWeek === 1 ? "PR merged" : "PRs merged")))
+        .when(s.commitsThisWeek != null, (e) => e.child(div().text_size(11).text_color(ink.hint).child(`${plural(s.commitsThisWeek, "commit")} this week`)))
         .when(Boolean(lead), (e) => e.child(div().min_w(0).truncate().text_size(12).text_color(t.foreground).child(lead)))
         .when(Boolean(rest), (e) => e.child(div().min_w(0).truncate().text_size(11).text_color(ink.hint).child(rest))))
       .child(this.bars("day", s.days.map((d) => ({ ...d, value: d.merged })), {

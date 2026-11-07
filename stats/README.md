@@ -27,7 +27,7 @@ The screenshot uses made-up data.
   - Next to each one's PR count, its median time to merge, so you can compare the two on more than
     volume.
 - **Commits** are commits linked to your account (your agents' commits count, when they commit as you) in each repo you merged into during the last 30
-  days, on the repo's default branch (or the branch you set in `workBranch`, below).
+  days (and this week, shown under the week's PR count), on the repo's default branch (or the branch you set in `workBranch`, below).
 - **Reviews** are other people's PRs you commented on (Codex and Claude reviews that post through
   your account count too), bucketed by when the PR was opened.
 - **Merge rate** is merged ÷ (merged + closed without merging) over the last 30 days.
