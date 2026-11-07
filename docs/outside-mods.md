@@ -22,8 +22,8 @@ for m in spaces workspace-status pane; do cp shared/names.js ~/.config/herdr-app
 ```
 
 [shared/names.js](../shared/names.js) names a space the same way in every list: a worktree tool's
-space "20261105-183951-57367" on branch `cw/Dinfirmaadresse-20261105-183951-57367` reads
-"Dinfirmaadresse 18:39". spaces-plus writes each space's name to `shared("space.labels")`
+space "20261105-183951-57367" on branch `cw/Acme-20261105-183951-57367` reads
+"Acme 18:39". spaces-plus writes each space's name to `shared("space.labels")`
 (`{ <space id>: { name, when } }`), and the other clones read it there.
 
 In `~/.config/herdr-app/layouts/main-plus.json`, point each block at its clone (`spaces-plus`,
@@ -55,9 +55,9 @@ function theme() {
 - A space named by a worktree tool (`20261105-131844-29722`) shows its repo instead, with the branch
   after it, or the time it was made (`13:18`) when the branch is main. The full name is in the tooltip,
   and the avatar takes the repo's initial.
-- The branch drops the tool prefix and the repo (`branchTail` in names.js): `cw/Dinfirmaadresse-<stamp>`
+- The branch drops the tool prefix and the repo (`branchTail` in names.js): `cw/Acme-<stamp>`
   says no more than the repo, so the time shows in its place. Before, two worktrees of one repo both
-  read "Dinfirmaadresse · cw/Dinfirmaadress…".
+  read "Acme · cw/Acme…".
 - A worktree space takes the color of the first space of its repo, once (`localStorage`
   `spaces.repoHue`), so the spaces of one repo read as one family. A color picked later stays.
 - The avatar letter is white or near-black (`#15161c`), whichever reads better on its color. The
@@ -97,7 +97,7 @@ The Issues tab, after a critique of a bot-heavy backlog (45 open, 8 of them `[gr
 ## workspace-status-plus
 
 - The theme wrapper.
-- The branch goes through `branchLabel` (names.js): `cw/Dinfirmaadresse-<stamp>` reads "worktree
+- The branch goes through `branchLabel` (names.js): `cw/Acme-<stamp>` reads "worktree
   19:44"; the tooltip keeps the whole branch. Padding 12 and gap 10, so "main · 5 agents" fits at
   weight 1.9.
 - It measures its width (`on_size_change`) and keeps parts in this order: the branch (shortened,

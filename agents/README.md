@@ -20,7 +20,7 @@ A changed copy of Herdr's own Agents sidebar (`agents`), for a setup where agent
 - When every agent runs the same program, the rows drop the program icon.
 
 With [spaces-plus](../docs/outside-mods.md#spaces-plus), the space hint uses its short names
-("Dinfirmaadresse 18:39" for a worktree space). Without it, the hint is Herdr's space name.
+("Acme 18:39" for a worktree space). Without it, the hint is Herdr's space name.
 
 ## Install
 
