@@ -1,5 +1,6 @@
 // Reads CPU, memory and GPU load on this computer or a remote machine, with no Herdr imports,
 // so the parsing and machine forwarding can be tested with plain Node.
+import { WINDOWS_COMMAND, readWindows } from "./windows.js";
 
 // One shell call per read; both branches sample the CPU over 1 s.
 // macOS: the first `iostat` report line is the average since boot, so take the second.
@@ -99,13 +100,17 @@ export function parseLoad(stdout) {
   const os = (nl < 0 ? stdout : stdout.slice(0, nl)).trim(), out = nl < 0 ? "" : stdout.slice(nl + 1);
   if (os === "darwin") return readMac(out);
   if (os === "linux") return readLinux(out);
+  if (os === "windows") return readWindows(out);
   throw new Error(`Unexpected output: ${(stdout.trim().split("\n")[0] || "nothing").slice(0, 80)}`);
 }
 
 // `machine` is a name from `hc machine ls`, or null for this computer. Never falls back to
 // reading this computer when a remote machine fails: the caller shows the error instead.
-export async function readLoad(exec, machine = null) {
-  const r = await exec("sh", ["-c", SCRIPT], { on: machine });
+// `platform` is the app's own ("windows", "macos", "linux"); only this computer on Windows reads through PowerShell,
+// every remote machine still runs the shell script.
+export async function readLoad(exec, machine = null, platform = null) {
+  const [command, args] = machine == null && platform === "windows" ? WINDOWS_COMMAND : ["sh", ["-c", SCRIPT]];
+  const r = await exec(command, args, { on: machine });
   const failed = () => new Error((r.stderr || `exit ${r.code}`).trim());
   if (r.code !== 0 && !r.stdout) throw failed();
   try { return parseLoad(r.stdout); }
