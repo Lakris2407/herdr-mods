@@ -71,6 +71,27 @@ function theme() {
   when the task starts with it ("Dinfirmaadresse.dk pricing page"). A group header in the grouped view
   adds the time ("Dinfirmaadresse · 18:39").
 - When every agent runs the same program, the rows drop the program icon.
+- A sub-agent row (a terminal an agent started with `hc run`) shows its task, not only "Codex": the
+  terminal's own title, cleaned like a top-level row's, without the ` | <folder>` that Codex adds at
+  the end. Without a telling title it falls back to the `name` label (`hc label <t> name=...`), then
+  the program. Before, three Codex workers read "Codex", "Codex", "Codex".
+- A sub-agent row shows how long it has run (`duration(Date.now() - k.created_ms)`), dim, before
+  its status, as a top-level row shows its time. In `subRow()`:
+
+```js
+function subTitle(k) {
+  const prog = k.program?.name;
+  const folder = (k.cwd ?? "").split("/").pop();
+  let live = clean(k.title);
+  if (folder && live.endsWith(` | ${folder}`)) live = live.slice(0, -(folder.length + 3)).trim();
+  const telling = live && live !== prog && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@") && live.toLowerCase() !== k.program?.key;
+  return (telling ? live : null) || k.name || k.labels?.name || k.template || prog || k.address;
+}
+
+// in subRow(), in place of the name child:
+  .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(subTitle(k)))
+  .when(Boolean(k.created_ms), el => el.child(div().flex_none().mr(6).text_size(11).text_color(t.dim).child(duration(Date.now() - k.created_ms))))
+```
 
 ## github-plus
 
