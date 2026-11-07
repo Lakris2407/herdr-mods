@@ -45,7 +45,8 @@ test("the layout's copies of this repo's mods match their sources", () => {
     for (const mod of readdirSync(join(root, folder, "mods"))) {
       if (!bundled.includes(mod)) continue;
       const src = join(root, folder, "mods", mod);
-      for (const file of files(src)) {
+      // Herdr writes these two into each installed mod; bundle-layout.sh leaves them out too.
+      for (const file of files(src).filter((f) => !/\/(gpui-kit\.d\.ts|jsconfig\.json)$/.test(f))) {
         const copy = file.replace(src, join(layoutDir, "mods", mod));
         assert.ok(existsSync(copy), `${copy} is missing: run ./bundle-layout.sh`);
         assert.ok(readFileSync(file).equals(readFileSync(copy)), `${copy} differs from ${file}: run ./bundle-layout.sh`);
