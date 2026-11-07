@@ -191,7 +191,8 @@ export default class Files extends View {
 
   openOutside(cx) {
     const src = `${this.root}/${this.file}`, platform = window()?.platform;
-    const [cmd, args] = platform === "windows" ? ["cmd", ["/c", "start", "", src]] : platform === "linux" ? ["xdg-open", [src]] : ["open", [src]];
+    // Not through cmd.exe: a file named "a&b.png" would run "b.png" there. explorer.exe takes the path as one argument.
+    const [cmd, args] = platform === "windows" ? ["explorer.exe", [src.replaceAll("/", "\\")]] : platform === "linux" ? ["xdg-open", [src]] : ["open", [src]];
     cx.spawn(async () => { await exec(cmd, args).catch(() => null); });
   }
 

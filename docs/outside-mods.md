@@ -9,6 +9,11 @@ Herdr's mods are under the Apache License 2.0 ([herdrdev/herdr-app](https://gith
 so this repo can ship changed copies of them. The Agents list is the first one: it is in
 [agents/](../agents/) and installs with `./sync.sh agents`, so it is no longer a clone to make by hand.
 
+The [Fleet layout](../layout/) now carries the finished clones (`spaces-plus`, `tabs-plus`, `pane-plus`,
+`workspace-status-plus`, `workspace-chrome-plus`, `files-plus`), so `./sync.sh layout` installs them. This
+page stays as the record of what each one changes. `github-plus` and Skillshare are not in the layout:
+they are other people's mods without a license, so the edits below stay on your own copy.
+
 ## Make the clones
 
 ```sh
