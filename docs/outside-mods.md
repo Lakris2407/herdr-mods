@@ -1,15 +1,18 @@
 # Changes to Herdr's own mods
 
 Two design reviews of the whole Herdr setup (2026-11-05) found problems in mods this repo does not
-hold: Herdr's own `spaces`, `agents`, `github`, `workspace-status`, `pane` and `workspace-chrome`, the
-`tabs-plus` clone, and the Skillshare mod. Herdr's
-mods are read-only and carry no license, so this repo does not ship copies of them. This page says how
-to make the same clones and what to change in each. A clone is yours and Herdr never updates it.
+hold: Herdr's own `spaces`, `github`, `workspace-status`, `pane` and `workspace-chrome`, the
+`tabs-plus` clone, and the Skillshare mod. This page says how to make the same clones and what to
+change in each. A clone is yours and Herdr never updates it.
+
+Herdr's mods are under the Apache License 2.0 ([herdrdev/herdr-app](https://github.com/herdrdev/herdr-app)),
+so this repo can ship changed copies of them. The Agents list is the first one: it is in
+[agents/](../agents/) and installs with `./sync.sh agents`, so it is no longer a clone to make by hand.
 
 ## Make the clones
 
 ```sh
-for m in spaces agents github workspace-status pane workspace-chrome; do
+for m in spaces github workspace-status pane workspace-chrome; do
   herdr-app do mod.clone "{\"name\":\"$m\",\"as\":\"$m-plus\"}"
   cp shared/colors.js ~/.config/herdr-app/mods/$m-plus/colors.js
 done
@@ -24,7 +27,7 @@ space "20261105-183951-57367" on branch `cw/Dinfirmaadresse-20261105-183951-5736
 (`{ <space id>: { name, when } }`), and the other clones read it there.
 
 In `~/.config/herdr-app/layouts/main-plus.json`, point each block at its clone (`spaces-plus`,
-`agents-plus`, `github-plus` for both the panel and the `status-ci` block, `workspace-status-plus`,
+`agents-plus` (from [agents/](../agents/)), `github-plus` for both the panel and the `status-ci` block, `workspace-status-plus`,
 `workspace-chrome-plus` for the brand row and the sidebar footer, `pane-plus` for the pane header).
 Give the `skillshare-toggle` block 84 px.
 Give `status-main` a `min` of 160, and the sidebar lists `spaces` weight 1 and `agents` weight 2, so the
@@ -63,35 +66,7 @@ function theme() {
 
 ## agents-plus
 
-- The theme wrapper on `t.selected` (as in spaces-plus), plus `working: readable(t.accent, t.chrome,
-  4.5)`: "Working" and its spinner take the accent, so they no longer share amber with a job that
-  waits. "Needs you" keeps `t.blocked`.
-- In the priority view a row shows the task first, then `· space`. The task takes the free width;
-  the space is a hint of at most 80 px, named from `shared("space.labels")` (not "202…"), and goes
-  when the task starts with it ("Dinfirmaadresse.dk pricing page"). A group header in the grouped view
-  adds the time ("Dinfirmaadresse · 18:39").
-- When every agent runs the same program, the rows drop the program icon.
-- A sub-agent row (a terminal an agent started with `hc run`) shows its task, not only "Codex": the
-  terminal's own title, cleaned like a top-level row's, without the ` | <folder>` that Codex adds at
-  the end. Without a telling title it falls back to the `name` label (`hc label <t> name=...`), then
-  the program. Before, three Codex workers read "Codex", "Codex", "Codex".
-- A sub-agent row shows how long it has run (`duration(Date.now() - k.created_ms)`), dim, before
-  its status, as a top-level row shows its time. In `subRow()`:
-
-```js
-function subTitle(k) {
-  const prog = k.program?.name;
-  const folder = (k.cwd ?? "").split("/").pop();
-  let live = clean(k.title);
-  if (folder && live.endsWith(` | ${folder}`)) live = live.slice(0, -(folder.length + 3)).trim();
-  const telling = live && live !== prog && !/^[~/]|^[A-Za-z]:\\/.test(live) && !live.includes("@") && live.toLowerCase() !== k.program?.key;
-  return (telling ? live : null) || k.name || k.labels?.name || k.template || prog || k.address;
-}
-
-// in subRow(), in place of the name child:
-  .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(subTitle(k)))
-  .when(Boolean(k.created_ms), el => el.child(div().flex_none().mr(6).text_size(11).text_color(t.dim).child(duration(Date.now() - k.created_ms))))
-```
+Now in this repo: [agents/](../agents/), with its changes in [agents/README.md](../agents/README.md).
 
 ## github-plus
 
