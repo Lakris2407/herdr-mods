@@ -33,8 +33,8 @@ export function when(date, now = new Date()) {
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// The part of a branch that says more than the repo: "cw/Dinfirmaadresse-fix-login" in the repo
-// Dinfirmaadresse is "fix-login". A branch that is only the repo and a stamp says nothing more ("").
+// The part of a branch that says more than the repo: "cw/Acme-fix-login" in the repo
+// Acme is "fix-login". A branch that is only the repo and a stamp says nothing more ("").
 export function branchTail(branch, repo) {
   if (!branch) return "";
   let rest = branch;
@@ -46,7 +46,7 @@ export function branchTail(branch, repo) {
   return rest;
 }
 
-// The branch as a status bar shows it: "cw/Dinfirmaadresse-<stamp>" is "worktree 19:44", the
+// The branch as a status bar shows it: "cw/Acme-<stamp>" is "worktree 19:44", the
 // tool prefix and repo go, and any other branch stays as it is.
 export function branchLabel(branch, repo, now = new Date()) {
   if (!branch) return "";

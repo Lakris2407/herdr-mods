@@ -438,7 +438,7 @@ export default class Agents extends View {
         .child(h_flex().flex_1().min_w(0).gap(5).items_center()
           // herdr-mods: the task first, then its space: you look for an agent by what it does.
           // The task takes the room; its space is a short hint after it.
-          // A task that starts with its space's name needs no hint ("Dinfirmaadresse.dk pricing").
+          // A task that starts with its space's name needs no hint ("Acme.com pricing").
           .child(div().flex_1().min_w(0).truncate().text_color(idle ? t.muted : t.foreground).child(full && more ? more : name))
           .when(full && Boolean(more) && !more.toLowerCase().startsWith(name.toLowerCase()), el => el.child(div().flex_none().max_w(80).truncate().text_color(t.dim).child(`\u00b7 ${name}`))))
         .when(Boolean(machine), el => el.child(div().text_size(10).text_color(t.dim).child(machine)))
