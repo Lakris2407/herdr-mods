@@ -103,6 +103,10 @@ remote. One `sh` call every 3 seconds picks the branch by `uname`; none need roo
   the numbers are the container's own: CPU against its `cpu.max` quota, and memory as the working
   set (usage minus reclaimable file cache, as `kubectl top` counts it) against `memory.max`.
   The tooltip says "container limit" when one applies.
+- **Windows** (only this computer, when Herdr itself runs on Windows) reads one PowerShell call:
+  `Get-Counter` for CPU and the 3D GPU engines, `Win32_OperatingSystem` for memory. Remote
+  machines still get the `sh` script above. The counter names are English, so a Windows install
+  in another language can show "no CPU reading".
 
 Install: copy `mods/system` to `~/.config/herdr-app/mods/system` and add a block before
 `status-quota` in the status row:
@@ -132,7 +136,7 @@ No Git Bash or hard-coded Node installation path is required.
 
 Run `quota-axi --json` in a terminal to check your provider sign-ins. Then run
 `herdr-app check ~/.config/herdr-app/mods/quota`. The optional system-load mod
-reads macOS and Linux machines, not Windows.
+reads this Windows computer through PowerShell (see above), and macOS and Linux machines through `sh`.
 
 ## Credits
 

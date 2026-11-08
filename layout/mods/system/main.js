@@ -1,9 +1,10 @@
 // CPU, memory and GPU load in the status bar: a small live graph and a percent for each.
 // Follows the selected space's machine. macOS reads `iostat`, `vm_stat`, `sysctl` and `ioreg`;
-// Linux reads /proc and, inside a container, its cgroup limits (see load.js). None need root.
+// Linux reads /proc and, inside a container, its cgroup limits (see load.js). Windows reads PowerShell counters (see windows.js).
+// None need root.
 import { View, div } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { exec, theme, settings, spaces, run } from "herdr";
+import { exec, theme, settings, spaces, run, window as appWindow } from "herdr";
 import { readLoad, sustained } from "./load.js";
 import { roles, level, readable } from "./colors.js";
 
@@ -74,7 +75,7 @@ export default class System extends View {
     const machine = this.machine;
     cx.spawn(async cx => {
       try {
-        const now = await readLoad(exec, machine);
+        const now = await readLoad(exec, machine, appWindow()?.platform);
         // A late reply from the machine before a switch never replaces the new one's data.
         if (machine !== this.machine) return;
         this.last = now;

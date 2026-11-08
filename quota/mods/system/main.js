@@ -75,7 +75,7 @@ export default class System extends View {
     const machine = this.machine;
     cx.spawn(async cx => {
       try {
-        const now = await readLoad(exec, machine, appWindow().platform);
+        const now = await readLoad(exec, machine, appWindow()?.platform);
         // A late reply from the machine before a switch never replaces the new one's data.
         if (machine !== this.machine) return;
         this.last = now;
