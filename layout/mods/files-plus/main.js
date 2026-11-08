@@ -2,6 +2,7 @@
 // files-plus: the shipped Files mod, plus image previews (local folders only).
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
+import { base64 } from "./b64.js";
 import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings, window, appHome, props, openOverlay, closeOverlay } from "herdr";
 
 function location() {
@@ -52,7 +53,9 @@ async function cachedImage(src, ext) {
 
 async function directory(path, on) {
   if (!on && window()?.platform === "windows") {
-    const r = await exec("powershell", ["-NoProfile", "-Command", "& { param($p) @(Get-ChildItem -LiteralPath $p -Force -ErrorAction Stop | Where-Object Name -ne '.git' | Select-Object -First 501 | ForEach-Object { @{ name=$_.Name; dir=($_.PSIsContainer -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)) } }) | ConvertTo-Json -Compress }", path]);
+    // The path goes in as Base64 (b64.js): -Command would parse it as code.
+    const p = `[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${base64(path)}'))`;
+    const r = await exec("powershell", ["-NoProfile", "-NonInteractive", "-Command", `$p = ${p}; @(Get-ChildItem -LiteralPath $p -Force -ErrorAction Stop | Where-Object Name -ne '.git' | Select-Object -First 501 | ForEach-Object { @{ name=$_.Name; dir=($_.PSIsContainer -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)) } }) | ConvertTo-Json -Compress`]);
     if (r.code !== 0) throw new Error(r.stderr || "Cannot list this folder");
     const result = JSON.parse(r.stdout || "[]");
     return Array.isArray(result) ? result : [result];
