@@ -45,10 +45,10 @@ export function aiTools({ body = "", headRefName = "", messages = [] }) {
 export const STALE_PR_DAYS = 30;
 
 // prs: [{ repo, number, state, createdAt, mergedAt, closedAt, headRefName, baseRefName, ai: {claude, codex} | null }]
-// commits: { "owner/repo": count } for the last 30 days; reviews: { last30, prev30 };
+// commits / commitsThisWeek: { "owner/repo": count } for the last 30 days / this week; reviews: { last30, prev30 };
 // open: [{ repo, number, createdAt, isDraft, reviewDecision, checks }] (your open PRs);
 // reviewRequests: [{ repo, number, createdAt }] (other people's open PRs that ask for your review).
-export function buildStats({ prs, commits, reviews, open, reviewRequests, now, weeks = 12 }) {
+export function buildStats({ prs, commits, commitsThisWeek, reviews, open, reviewRequests, now, weeks = 12 }) {
   const work = dedupe(prs).filter((pr) => !isPromotion(pr));
   const merged = work.filter((pr) => pr.mergedAt);
   const starts = weekStarts(now, weeks);
@@ -110,6 +110,8 @@ export function buildStats({ prs, commits, reviews, open, reviewRequests, now, w
     waiting,
     repos,
     commits30: Object.values(commits ?? {}).reduce((s, n) => s + n, 0),
+    // Null when the source gave no weekly count (older cache, demo), so the line stays hidden instead of showing 0.
+    commitsThisWeek: commitsThisWeek == null ? null : Object.values(commitsThisWeek).reduce((s, n) => s + n, 0),
     ai,
     aiHours,
     reviews: reviews ?? { last30: 0, prev30: 0 },

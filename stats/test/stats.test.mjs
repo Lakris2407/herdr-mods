@@ -236,3 +236,13 @@ test("the demo data fills every part of the panel", () => {
   assert.ok(s.stale > 0 && s.ai.claude && s.ai.codex && s.ai.both);
   assert.equal(buildStats(demoRaw(at("2026-11-05T15:00:00"))).merged30, s.merged30, "seeded: the same every run");
 });
+
+test("commits this week add up across repos, and stay null when no weekly count was given", () => {
+  const now = at("2026-11-01T12:00:00");
+  const pr = (repo, number, head = "f") => ({ repo, number, createdAt: iso("2026-10-30T08:00:00"), mergedAt: iso("2026-10-30T09:00:00"), headRefName: head, baseRefName: "main" });
+  const prs = [pr("o/a", 1), pr("o/b", 1, "claude/session-x")];
+  const s = buildStats({ prs, commits: { "o/a": 7, "o/b": 3 }, commitsThisWeek: { "o/a": 2, "o/b": 1 }, now, weeks: 1 });
+  assert.equal(s.commitsThisWeek, 3);
+  assert.equal(s.merged30, 2, "a claude/ branch PR is still counted: nothing is filtered by branch name");
+  assert.equal(buildStats({ prs, commits: {}, now, weeks: 1 }).commitsThisWeek, null);
+});
