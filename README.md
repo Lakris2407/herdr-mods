@@ -11,6 +11,7 @@ where several coding agents work at once, with self-hosted build machines beside
 | [Path menu](path-menu/) | Right-click a terminal to open the files and folders on screen. |
 | [Agents list](agents/) | Herdr's Agents sidebar, changed: sub-agents show their task and how long they have run, the task comes first, and quiet text reads. |
 | [Controls](controls/) | One menu to turn any status-bar block, tab-bar button and side-panel button off and on. |
+| [Fleet layout](layout/) | The whole window these mods were made for, with the changed copies of Herdr's sidebar, tab bar, pane header and status bar. One install from herdr.dev/layouts. |
 
 ![Status bar with Runners, system load and quota](runners/preview-bar.png)
 

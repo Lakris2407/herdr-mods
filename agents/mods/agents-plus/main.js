@@ -103,7 +103,7 @@ function icon(p, size, color) {
 
 export default class Agents extends View {
   init(_props, cx) {
-    if (props()?.sortMenu) return;
+    if (props()?.sortMenu || props()?.subMenu) return;
     this.folded = new Set();
     // Each agent's last state and when it changed (ms), kept across restarts.
     this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}");
@@ -194,6 +194,54 @@ export default class Agents extends View {
         .when(s.id === on, (el) => el.child(svg("mods/workspace-chrome/check.svg").size(14).flex_none().text_color(t.foreground)))));
   }
 
+  // herdr-mods: a sub-agent's right-click menu. A sub-agent has no pane of its own, so without this
+  // the only way to end one was to peek at it first. Stopping one that still works or waits asks first.
+  subMenu(t) {
+    const all = terminals();
+    const k = all.find((x) => x.address === props().subMenu);
+    const close = () => closeOverlay(props().overlay);
+    if (!k) return div().size_full().bg(t.popover);
+    const st = kidStatus(k, new Map(agents().map((a) => [a.address, a.status])));
+    const kids = this.tree(all, k.address).length;
+    const stop = () => {
+      close();
+      if (st === "idle") return run("terminal.kill", { terminal: k.address });
+      const also = kids ? ` Its ${kids} sub-agent${kids > 1 ? "s" : ""} stop too.` : "";
+      openOverlay({ mod: "confirm", kind: "dialog", width: 400, height: 170, props: {
+        title: "Stop this agent?",
+        detail: `"${subTitle(k)}" is ${st === "blocked" ? "waiting for you" : "still working"}. Its terminal closes and its work stops.${also}`,
+        command: { name: "terminal.kill", args: { terminal: k.address } },
+      } });
+    };
+    const items = [
+      ["Peek", "search", () => { close(); this.peek(k.address); }],
+      ["Open as tab", "panel-right", () => { close(); run("terminal.keep", { terminal: k.address }); }],
+      [kids ? "Stop with its sub-agents" : "Stop", "x", stop, true],
+    ];
+    return v_flex()
+      .w_full()
+      .p(5)
+      .bg(t.popover)
+      .text_size(12.8)
+      .child(div().px(8).pt(4).pb(6).text_size(11).text_color(t.dim).truncate().child(subTitle(k)))
+      .children(items.map(([label, glyph, act, danger]) => h_flex()
+        .id(`sub-menu-${glyph}`)
+        .h(31)
+        .px(8)
+        .gap(9)
+        .rounded(7)
+        .items_center()
+        .text_color(danger ? t.blocked ?? t.foreground : t.foreground)
+        .hover((el) => el.bg(t.hover))
+        .on_click(act)
+        .child(svg(`mods/workspace-chrome/${glyph}.svg`).size(14).flex_none().text_color(danger ? t.blocked ?? t.muted : t.muted))
+        .child(div().flex_1().child(label))));
+  }
+
+  openSubMenu(addr) {
+    openOverlay({ mod: "agents-plus", kind: "popup", width: 220, height: 10 + 27 + 3 * 31, props: { subMenu: addr } });
+  }
+
   peek(addr) {
     run("terminal.peek", { terminal: addr });
   }
@@ -228,6 +276,7 @@ export default class Agents extends View {
       .when(on, (el) => el.bg(t.raised))
       .hover((s) => s.bg(t.hover))
       .on_click(() => this.peek(k.address))
+      .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); this.openSubMenu(k.address); })
       .children(s.lines.map(l => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
@@ -251,6 +300,7 @@ export default class Agents extends View {
   render(cx) {
     const t = theme();
     if (props()?.sortMenu) return this.sortMenu(t);
+    if (props()?.subMenu) return this.subMenu(t);
     const collapsed = narrow();
     const sort = sortOf();
     let list = agents();
@@ -388,7 +438,7 @@ export default class Agents extends View {
         .child(h_flex().flex_1().min_w(0).gap(5).items_center()
           // herdr-mods: the task first, then its space: you look for an agent by what it does.
           // The task takes the room; its space is a short hint after it.
-          // A task that starts with its space's name needs no hint ("Dinfirmaadresse.dk pricing").
+          // A task that starts with its space's name needs no hint ("Acme.com pricing").
           .child(div().flex_1().min_w(0).truncate().text_color(idle ? t.muted : t.foreground).child(full && more ? more : name))
           .when(full && Boolean(more) && !more.toLowerCase().startsWith(name.toLowerCase()), el => el.child(div().flex_none().max_w(80).truncate().text_color(t.dim).child(`\u00b7 ${name}`))))
         .when(Boolean(machine), el => el.child(div().text_size(10).text_color(t.dim).child(machine)))
