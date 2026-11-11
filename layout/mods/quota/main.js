@@ -4,8 +4,8 @@ import { visibleWindows } from "./quota-windows.js";
 import { roles, level, readable } from "./colors.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { runQuotaCommand, copilotWindows } from "./quota-command.js";
-import { SCRIPT as OPENROUTER, PERIODS, parseOpenRouter, shortModel, money, creditUsed } from "./openrouter.js";
+import { loadQuota } from "./quota-data.js";
+import { PERIODS, shortModel, money, creditUsed } from "./openrouter.js";
 import { exec, theme, settings, shared, setShared, props, openOverlay, knownAgents, nextCommand, spaces, run } from "herdr";
 
 const EVERY = 120000, STALE = 10 * 60000;
@@ -73,44 +73,6 @@ function bar(w, width, height, now, t, remaining, r) {
     .when(e !== null, el => el.child(div().absolute().top(-2).h(height + 4).w(1).left(Math.round(width * (remaining && !w.shareOf ? 1 - e : e))).bg(t.foreground).opacity(0.45)));
 }
 
-async function readOpenRouter() {
-  try {
-    const r = await exec("sh", ["-c", OPENROUTER]);
-    return r.code === 0 ? parseOpenRouter(r.stdout) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function load(on = null) {
-  const openRouter = on == null ? readOpenRouter() : null;
-  let r = await runQuotaCommand(exec, { on }).catch(e => ({ code: -1, stderr: String(e) }));
-  // Apps started from the Dock miss PATH entries set in the shell's rc file (npm, nvm, mise): ask the person's own shell.
-  if (r.code !== 0) r = await exec("sh", ["-c", 'exec "${SHELL:-/bin/sh}" -lic "quota-axi --json" </dev/null'], { on }).catch(e => ({ code: -1, stderr: String(e) }));
-  if (r.code !== 0) throw new Error(`quota-axi failed: ${(r.stderr || "").trim().split("\n").pop() || `exit ${r.code}`}`);
-  // An interactive shell can print a banner first; the report starts at the first brace.
-  const data = JSON.parse(r.stdout.slice(r.stdout.indexOf("{")));
-  const providers = (data.providers ?? []).map(p => ({
-      id: p.provider, label: p.label ?? p.provider, plan: p.plan ?? null, status: p.state?.status ?? null,
-      windows: (p.windows ?? []).map(w => ({
-        id: w.id, label: w.label, kind: w.kind, shareOf: w.shareOf ?? null,
-        // Newer quota-axi reports remaining percentages; shares are not independent allowances.
-        percentUsed: Number.isFinite(w.percentUsed) ? w.percentUsed
-          : w.shareOf == null && Number.isFinite(w.percentRemaining) ? 100 - w.percentRemaining : null,
-        resetsAt: w.resetsAt ?? null, windowSeconds: w.windowSeconds ?? null,
-      })).filter(w => Number.isFinite(w.percentUsed)),
-    }));
-  // This computer only: gh on a remote machine would need its own login there.
-  const copilot = on == null ? providers.find(p => p.id === "copilot" && !p.windows.length) : null;
-  if (copilot) copilot.windows = (await copilotWindows(exec)) ?? [];
-  // OpenRouter spend is per account, not per machine: read it here only, and let a failure leave the rest alone.
-  if (on == null) {
-    const or = await openRouter;
-    if (or) providers.push(or);
-  }
-  return { at: Date.now(), providers };
-}
-
 export default class Quota extends View {
   init(_props, cx) {
     // The app's program table knows each agent's icon and whether it is a one-color glyph.
@@ -162,7 +124,11 @@ export default class Quota extends View {
     if (this.loading.has(on)) return;
     this.loading.add(on);
     cx.spawn(async cx => {
-      try { setShared(stateKey("quota.data", on), await load(on)); setShared(stateKey("quota.error", on), null); }
+      try {
+        const data = await loadQuota(exec, on);
+        setShared(stateKey("quota.data", on), data);
+        setShared(stateKey("quota.error", on), data.error);
+      }
       catch (e) { setShared(stateKey("quota.error", on), String(e.message ?? e)); }
       finally { this.loading.delete(on); cx.notify(); }
     });
