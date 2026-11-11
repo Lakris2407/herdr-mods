@@ -70,7 +70,34 @@ The mod runs `quota-axi --json` every 2 minutes, and when you click Refresh. If 
 it on its own `PATH` (common when Herdr starts from the Dock), it asks your login shell
 (`$SHELL -lic`). Both commands run on the selected space's machine. The mod itself makes no
 network requests and stores no tokens; `quota-axi` reads that machine's Claude, Codex and other
-CLI sign-ins to ask each provider for your usage.
+CLI sign-ins to ask each provider for your usage. The one exception is OpenRouter, below.
+
+## OpenRouter spend (DeepSeek)
+
+OpenRouter is pay as you go, so it shows dollars, not a percentage: a baby-blue whale, the short
+model name and what you spent today (`v4.1-flash $1.42 today`). The popup adds this week, this
+month and the credit left, and lets you pick which period the status bar shows. The amount turns
+orange, then red, when less than 20% and 8% of your credit is left.
+
+- **Spend** comes from `https://openrouter.ai/api/v1/key` (`usage_daily`, `usage_weekly`,
+  `usage_monthly`). **Credit left** comes from `/api/v1/credits`, or from the key's own limit
+  when the key cannot read credits.
+- **Model** is the `model:` line in `~/.dsh/profiles/headless/cordis.patch.yml`, the profile
+  DeepSeek Harness (`dsh-worker`) uses.
+- It reads this computer only, on the same 2-minute timer. Spend is per account, not per machine.
+
+Save the key once in the macOS Keychain. The command asks for the key, so it stays out of your
+shell history:
+
+```sh
+security add-generic-password -U -a "$USER" -s openrouter-api-key -w
+```
+
+Without that entry the mod tries `OPENROUTER_API_KEY` from Herdr's environment. Without either,
+OpenRouter does not show (turn on **Signed-out providers** to see it as not signed in). The key
+goes from the Keychain to `curl` through a pipe inside one fixed `sh` script
+(`quota/mods/quota/openrouter.js`). It is never a command argument, and it never reaches the mod,
+Herdr's shared state, the repository or a log. Only the dollar amounts and the model name do.
 
 ## Remote machines
 
