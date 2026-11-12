@@ -6,6 +6,14 @@ const STALE = 3 * MIN;
 
 export const jobKey = (j) => j.key ?? `${j.repo}:${j.workflow}:${j.name}`;
 
+// A job runs slow past 1.2x its usual length. One or two finished runs are no usual length: a light run
+// (a pull request that skips the tests) would make every full run look slow.
+const SLOW = 1.2, SAMPLES = 3;
+export function isSlow(j, s, now) {
+  const key = jobKey(j), usual = s.typical?.[key];
+  return Boolean(j.started && usual && (s.samples?.[key] ?? 0) >= SAMPLES && now - j.started > usual * SLOW);
+}
+
 export function median(list) {
   const s = [...list].sort((a, b) => a - b), mid = s.length >> 1;
   return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2);

@@ -99,12 +99,11 @@ export function loadText(m) {
 // One job: repo tag, what and where, and a time on the right. `bar` adds progress against the usual length.
 // `tag: false` drops the repo tag, for a setup that watches one repo; `title` replaces the job's label.
 // `bg` is the surface the row sits on, so its secondary text is lifted for that surface.
-export function jobRow(id, j, { right, rightColor, sub, typical, now, tag = true, title, bg = t.background }, t) {
+export function jobRow(id, j, { right, rightColor, sub, typical, slow = false, now, tag = true, title, bg = t.background }, t) {
   const k = ink(t, bg);
   const usual = typical?.[jobKey(j)];
   const pct = j.started && usual ? Math.min(1, (now - j.started) / usual) : null;
-  // Past 1.2x its usual length, the bar turns amber: this run is slow, not almost done.
-  const slow = j.started && usual && now - j.started > usual * 1.2;
+  // `slow` (model.js isSlow) turns the bar amber: this run is slow, not almost done.
   return h_flex().id(id).gap(8).px(6).py(5).items_center().rounded(6).cursor_pointer()
     .hover((e) => e.bg(t.hover)).on_click(() => openJob(j)).tooltip(j.url ? `${j.repo} · open on GitHub` : `${j.repo} · ${j.worktree} · open its logs`)
     .when(tag, (e) => e.child(repoTag(j, t)))

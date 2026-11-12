@@ -43,7 +43,7 @@ export function tick(cx) {
       next = await read(s, now);
     } catch (e) {
       // Keep the last good data and its time, so no view calls it fresh.
-      next = { ...(s ?? { at: null, jobs: [], machines: [], done: {}, typical: {} }), errorAt: now, error: String(e.message ?? e) };
+      next = { ...(s ?? { at: null, jobs: [], machines: [], done: {}, typical: {}, samples: {} }), errorAt: now, error: String(e.message ?? e) };
     } finally {
       setShared(LOCK, 0);
     }
@@ -90,11 +90,13 @@ async function read(prev, now) {
   // How long each job usually takes, from the last two hours, kept across restarts.
   const typical = { ...(prev?.typical ?? {}) }, groups = {};
   for (const j of jobs) if (j.status === "completed" && j.conclusion === "success" && j.started && j.completed) (groups[jobKey(j)] ??= []).push(j.completed - j.started);
-  for (const [k, list] of Object.entries(groups)) typical[k] = median(list);
+  // `samples` says how many runs a usual length stands on: too few and no view calls a job slow.
+  const samples = {};
+  for (const [k, list] of Object.entries(groups)) { typical[k] = median(list); samples[k] = list.length; }
 
   const waiting = new Set(jobs.filter((j) => j.status === "queued").map((j) => j.id));
   const alerted = (prev?.alerted ?? []).filter((id) => waiting.has(id));
-  return { at: now, errorAt: null, loadAt: loadDue ? now : prev.loadAt, error: ln?.error ? `Lanes status: ${ln.error}` : null, missing: Boolean(config.missing), jobs, done, machines, typical, alerted,
+  return { at: now, errorAt: null, loadAt: loadDue ? now : prev.loadAt, error: ln?.error ? `Lanes status: ${ln.error}` : null, missing: Boolean(config.missing), jobs, done, machines, typical, samples, alerted,
     alertAfter: config.waitAlertMinutes * 60000 };
 }
 
