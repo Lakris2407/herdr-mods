@@ -269,3 +269,28 @@ test("a job is slow only against a usual length that three finished runs stand o
   assert.equal(model.isSlow(j, s, now), true);
   assert.equal(model.isSlow({ ...j, started: now - MIN }, s, now), false);
 });
+
+test("rerunning a cached workflow replaces its finished jobs until it completes again", async () => {
+  const { loadJobs } = await import("../mods/runners/load.js");
+  const config = { repos: [{ repo: "acme/web", short: "WEB" }], labels: [], machines: [] };
+  const iso = (ms) => new Date(ms).toISOString();
+  let status = "completed", jobId = 70;
+  state.exec = async (cmd, args) => {
+    const path = args[1];
+    if (path.endsWith("actions/runs?per_page=30")) return { code: 0, stdout: JSON.stringify({ id: 7, workflow: "CI", status, updated: iso(now - MIN) }), stderr: "" };
+    if (path.includes("/jobs")) return { code: 0, stdout: JSON.stringify({ id: jobId, name: "e2e", status, conclusion: status === "completed" ? "success" : null, labels: ["self-hosted"], started: iso(now - 2 * MIN), completed: status === "completed" ? iso(now - MIN) : null }), stderr: "" };
+    if (path.includes("actions/runners")) return { code: 0, stdout: "", stderr: "" };
+    throw new Error(`unexpected ${cmd} ${args.join(" ")}`);
+  };
+  const first = await loadJobs(config, {}, now);
+  assert.deepEqual(first.jobs.map((j) => j.id), [70]);
+  status = "in_progress";
+  jobId = 71;
+  const retry = await loadJobs(config, first.done, now);
+  assert.deepEqual(retry.jobs.map((j) => j.id), [71]);
+  assert.deepEqual(retry.done, {});
+  status = "completed";
+  const finished = await loadJobs(config, retry.done, now);
+  assert.deepEqual(finished.jobs.map((j) => j.id), [71]);
+  assert.deepEqual(finished.done[7].jobs.map((j) => j.id), [71]);
+});
