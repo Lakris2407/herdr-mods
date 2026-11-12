@@ -43,6 +43,7 @@ export function demoSnapshot(now) {
   return {
     at: now, loadAt: now, error: null, missing: false, demo: true, jobs, done: {}, alerted: [], alertAfter: 5 * MIN,
     typical: { "acme/game:tests:unity": 5 * MIN, "acme/api:CI:integration": 10 * MIN, "acme/web:CI:e2e": 8 * MIN, "acme/game:build:": 7 * MIN },
+    samples: { "acme/game:tests:unity": 3, "acme/api:CI:integration": 3, "acme/web:CI:e2e": 3, "acme/game:build:": 3 },
     machines: [
       { name: "Build mini 1", ssh: "demo", load: 7.6, cores: 8, loadError: null, warm: null,
         runners: [slot("mini-1 unity", "unity lane"), slot("mini-1 core", "core lane"), slot("web-mini-1"), slot("api-mini-1")] },

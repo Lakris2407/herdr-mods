@@ -237,3 +237,60 @@ test("two slots of one machine share one toast", () => {
   assert.equal(model.offlineToast(r.posts[0]).title, "2 runners on Claws mini are offline");
   assert.equal(model.offlineToast({ kind: "off", machine: "Claws mini", names: ["core"] }).body, "Claws mini · jobs wait for another slot · open Runners");
 });
+
+test("a finished run counts for two hours, also after the newest runs push it off the list", async () => {
+  state.shared.clear();
+  state.files.set(CONFIG, JSON.stringify({ repos: [{ repo: "acme/web", short: "WEB" }], machines: [{ name: "Build 1", runners: ["web-1"] }] }));
+  const iso = (ms) => new Date(Date.now() - ms).toISOString();
+  let listed = [7];
+  state.exec = async (cmd, args) => {
+    if (args[1].endsWith("actions/runs?per_page=30")) return { code: 0, stdout: listed.map((id) => JSON.stringify({ id, workflow: "CI", title: "x", status: "completed", branch: "main", updated: iso(10 * MIN) })).join("\n"), stderr: "" };
+    if (args[1].includes("/jobs")) return { code: 0, stdout: JSON.stringify({ id: Number(/runs\/(\d+)/.exec(args[1])[1]) * 10, name: "e2e", status: "completed", conclusion: "success", labels: ["self-hosted"], runner: "web-1", created: iso(15 * MIN), started: iso(14 * MIN), completed: iso(10 * MIN) }), stderr: "" };
+    if (args[1].includes("actions/runners")) return { code: 0, stdout: "", stderr: "" };
+    throw new Error(`unexpected ${cmd} ${args.join(" ")}`);
+  };
+  const first = await read();
+  listed = [8];
+  // A second read on the same state (read() starts clean): ask for a refresh, then wait for the new snapshot.
+  state.shared.set("runners.refresh", Date.now() + 1000);
+  const cx = { spawn: (f) => f(cx), notify() {} };
+  await poll.tick(cx);
+  for (let i = 0; i < 100 && poll.snapshot() === first; i++) await new Promise((r) => setTimeout(r, 5));
+  const s = poll.snapshot();
+  assert.deepEqual(s.jobs.map((j) => j.run).sort(), [7, 8]);
+  assert.equal(s.samples["acme/web:CI:e2e"], 2);
+});
+
+test("a job is slow only against a usual length that three finished runs stand on", () => {
+  const now = 100 * MIN, j = { repo: "o/r", workflow: "CI", name: "test", started: now - 3 * MIN };
+  const s = { typical: { "o/r:CI:test": MIN }, samples: { "o/r:CI:test": 2 } };
+  assert.equal(model.isSlow(j, s, now), false);
+  s.samples["o/r:CI:test"] = 3;
+  assert.equal(model.isSlow(j, s, now), true);
+  assert.equal(model.isSlow({ ...j, started: now - MIN }, s, now), false);
+});
+
+test("rerunning a cached workflow replaces its finished jobs until it completes again", async () => {
+  const { loadJobs } = await import("../mods/runners/load.js");
+  const config = { repos: [{ repo: "acme/web", short: "WEB" }], labels: [], machines: [] };
+  const iso = (ms) => new Date(ms).toISOString();
+  let status = "completed", jobId = 70;
+  state.exec = async (cmd, args) => {
+    const path = args[1];
+    if (path.endsWith("actions/runs?per_page=30")) return { code: 0, stdout: JSON.stringify({ id: 7, workflow: "CI", status, updated: iso(now - MIN) }), stderr: "" };
+    if (path.includes("/jobs")) return { code: 0, stdout: JSON.stringify({ id: jobId, name: "e2e", status, conclusion: status === "completed" ? "success" : null, labels: ["self-hosted"], started: iso(now - 2 * MIN), completed: status === "completed" ? iso(now - MIN) : null }), stderr: "" };
+    if (path.includes("actions/runners")) return { code: 0, stdout: "", stderr: "" };
+    throw new Error(`unexpected ${cmd} ${args.join(" ")}`);
+  };
+  const first = await loadJobs(config, {}, now);
+  assert.deepEqual(first.jobs.map((j) => j.id), [70]);
+  status = "in_progress";
+  jobId = 71;
+  const retry = await loadJobs(config, first.done, now);
+  assert.deepEqual(retry.jobs.map((j) => j.id), [71]);
+  assert.deepEqual(retry.done, {});
+  status = "completed";
+  const finished = await loadJobs(config, retry.done, now);
+  assert.deepEqual(finished.jobs.map((j) => j.id), [71]);
+  assert.deepEqual(finished.done[7].jobs.map((j) => j.id), [71]);
+});

@@ -1,5 +1,5 @@
 // One read of the runners: slots and their jobs from GitHub (`gh api`), load over ssh.
-// Finished runs never change, so their jobs are read once and handed back in `done` for the next read.
+// Finished runs are cached in `done` until they expire or become active again for a rerun.
 import { exec } from "herdr";
 
 const HOUR = 3600000, KEEP = 2 * HOUR;
@@ -50,12 +50,19 @@ async function repoJobs(repo, done, now, isWatched) {
   const todo = [...active, ...fresh.filter((r) => !done[r.id]).slice(0, BACKFILL)];
   const read = await Promise.all(todo.map(async (r) => [r, await api(`repos/${repo.repo}/actions/runs/${r.id}/jobs?per_page=100`, JOB_JQ)]));
   const jobs = [], newDone = {};
-  // Finished runs read before still count, until they leave the two-hour window.
-  for (const r of fresh) if (done[r.id]) newDone[r.id] = done[r.id];
+  // Finished runs read before still count, until they leave the two-hour window. A busy repo pushes
+  // them off the newest page of runs long before that, so their age decides, not the page.
+  const listed = new Set(fresh.map((r) => String(r.id)));
+  const rerunning = new Set(active.map((r) => String(r.id)));
+  for (const [id, d] of Object.entries(done)) {
+    // A rerun keeps its run ID: the live attempt replaces the cached finished jobs.
+    if (rerunning.has(id)) continue;
+    if (d.repo ? d.repo === repo.repo && now - d.at < KEEP : listed.has(id)) newDone[id] = d;
+  }
   for (const [r, list] of read) {
     const mine = list.map((j) => job(repo, r, j)).filter(isWatched);
     if (ACTIVE.has(r.status)) jobs.push(...mine);
-    else newDone[r.id] = { at: time(r.updated), jobs: mine };
+    else newDone[r.id] = { at: time(r.updated), repo: repo.repo, jobs: mine };
   }
   for (const d of Object.values(newDone)) jobs.push(...d.jobs);
   return { jobs, done: newDone };

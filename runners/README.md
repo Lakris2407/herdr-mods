@@ -15,7 +15,8 @@ GitHub Actions runners and any machine you can reach over ssh.
 - **Panel** beside Files and Changes: a line that names what needs a look (a slot offline, a
   machine ssh can't read), only when something does; totals (waiting, failed in the last hour, busy
   slots, today's wait); the waiting jobs (oldest first, only when some wait); the running jobs, each
-  with how long it has run against its usual length and a bar for its progress (amber past 1.2x);
+  with how long it has run against its usual length and a bar for its progress (amber past 1.2x, once three
+  finished runs of that job say what is usual);
   each machine with its load and a bar per slot naming its job; and the finished jobs. Passed jobs
   of one run share a row (`CI · 3 jobs`); failures stay listed for the hour, one row each; passed
   jobs drop off after 10 minutes (`Show N older` brings them back). A machine's dot is green only

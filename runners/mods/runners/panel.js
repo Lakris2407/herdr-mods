@@ -6,7 +6,7 @@ import { h_flex, v_flex } from "gpui-base";
 import { theme, run, layout } from "herdr";
 import { snapshot, refresh } from "./poll.js";
 import { configPath } from "./config.js";
-import { waiting, running, finished, summary, medianWait, duration, ago, label, jobKey, problems, byRun } from "./model.js";
+import { waiting, running, finished, summary, medianWait, duration, ago, label, jobKey, problems, byRun, isSlow } from "./model.js";
 import { jobRow, loadBar, loadText, button, colors, ink, onFill, freshness, slotColor, openLanes, openJob, runTime } from "./ui.js";
 import { readable } from "./colors.js";
 import { step, current, leaveSide } from "./keys.js";
@@ -103,7 +103,7 @@ export class Panel {
         .child(div().truncate().text_color(fg).when(r.status === "offline", (e) => e.font_semibold()).child(text))
         // How far the job is through its usual length; amber past 1.2x, when it runs slow.
         .when(pct != null, (e) => e.child(div().absolute().left_0().bottom_0().h(2)
-          .bg(now - j.started > usual * 1.2 ? c.wait : t.accent_foreground).w(`${Math.round(pct * 100)}%`))));
+          .bg(isSlow(j, s, now) ? c.wait : t.accent_foreground).w(`${Math.round(pct * 100)}%`))));
     return this.edge(row, t);
   }
 
@@ -132,12 +132,12 @@ export class Panel {
   // What runs now, oldest first: elapsed against the usual length, with the bar; amber when it runs slow.
   running(s, t, now, tags) {
     const c = colors(t, t.raised), k = ink(t, t.raised), list = running(s);
-    const isSlow = (j) => { const u = s.typical[jobKey(j)]; return Boolean(j.started && u && now - j.started > u * 1.2); };
-    const slow = list.filter(isSlow).length;
+    const late = (j) => isSlow(j, s, now);
+    const slow = list.filter(late).length;
     return this.card("Running", slow ? `${slow} slow` : "run time / usual", v_flex().gap(1).children(list.map((j) => {
       const sub = [j.runner, j.branch].filter(Boolean).join(" · "), right = runTime(j, s.typical, now);
-      return this.act(`r-${j.id}`, jobRow(`r-${j.id}`, j, { right, rightColor: isSlow(j) ? c.wait : k.sub, sub, typical: s.typical, now, tag: tags, bg: t.raised }, t),
-        () => openJob(j), t, `${label(j)} on ${sub}, ${right}${isSlow(j) ? ", slow" : ""}`);
+      return this.act(`r-${j.id}`, jobRow(`r-${j.id}`, j, { right, rightColor: late(j) ? c.wait : k.sub, sub, typical: s.typical, slow: late(j), now, tag: tags, bg: t.raised }, t),
+        () => openJob(j), t, `${label(j)} on ${sub}, ${right}${late(j) ? ", slow" : ""}`);
     })), t, slow ? c.wait : null);
   }
 

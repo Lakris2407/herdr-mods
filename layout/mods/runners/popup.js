@@ -3,7 +3,7 @@ import { div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, props, run, closeOverlay } from "herdr";
 import { snapshot, refresh } from "./poll.js";
-import { waiting, running, duration, summary } from "./model.js";
+import { waiting, running, duration, summary, isSlow } from "./model.js";
 import { jobRow, groupTitle, loadBar, loadText, button, colors, ink, freshness, runTime, openLanes } from "./ui.js";
 
 const MAX = 6;
@@ -44,7 +44,7 @@ export class Popup {
         .child(group("pop-wait", `Waiting · ${w.length}`, w.length ? `longest ${duration(sum.longest)}` : "nothing waits",
           [...w.slice(0, MAX).map((j) => jobRow(`pw-${j.id}`, j, { right: duration(now - j.created), rightColor: c.wait, sub: `${j.branch} · needs ${j.labels.join(", ")}` }, t)), ...more(w)]))
         .child(group("pop-run", `Running · ${r.length}`, `${sum.busy} of ${sum.total} slots`,
-          [...r.slice(0, MAX).map((j) => jobRow(`pr-${j.id}`, j, { right: runTime(j, s.typical, now), sub: `${j.branch} · ${j.runner}`, typical: s.typical, now }, t)), ...more(r)]))
+          [...r.slice(0, MAX).map((j) => jobRow(`pr-${j.id}`, j, { right: runTime(j, s.typical, now), sub: `${j.branch} · ${j.runner}`, typical: s.typical, slow: isSlow(j, s, now), now }, t)), ...more(r)]))
         .child(group("pop-mach", "Machines", "load / cores", s.machines.map((m) => machineRow(m, t)))))
       .child(h_flex().h(40).flex_none().px(12).gap(6).items_center().justify_end()
         .child(button("pop-panel", "Open panel", t, () => {
