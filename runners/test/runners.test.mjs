@@ -294,3 +294,27 @@ test("rerunning a cached workflow replaces its finished jobs until it completes 
   assert.deepEqual(finished.jobs.map((j) => j.id), [71]);
   assert.deepEqual(finished.done[7].jobs.map((j) => j.id), [71]);
 });
+
+test("a rerun that started and ended between two reads replaces the cached jobs", async () => {
+  const { loadJobs } = await import("../mods/runners/load.js");
+  const config = { repos: [{ repo: "acme/web", short: "WEB" }], labels: [], machines: [] };
+  const iso = (ms) => new Date(ms).toISOString();
+  let jobId = 70, updated = now - 10 * MIN, reads = 0;
+  state.exec = async (cmd, args) => {
+    const path = args[1];
+    if (path.endsWith("actions/runs?per_page=30")) return { code: 0, stdout: JSON.stringify({ id: 7, workflow: "CI", status: "completed", updated: iso(updated) }), stderr: "" };
+    if (path.includes("/jobs")) { reads++; return { code: 0, stdout: JSON.stringify({ id: jobId, name: "e2e", status: "completed", conclusion: "success", labels: ["self-hosted"], started: iso(updated - MIN), completed: iso(updated) }), stderr: "" }; }
+    if (path.includes("actions/runners")) return { code: 0, stdout: "", stderr: "" };
+    throw new Error(`unexpected ${cmd} ${args.join(" ")}`);
+  };
+  const first = await loadJobs(config, {}, now);
+  // An unchanged run is not read again.
+  const same = await loadJobs(config, first.done, now);
+  assert.equal(reads, 1);
+  assert.deepEqual(same.jobs.map((j) => j.id), [70]);
+  jobId = 71;
+  updated = now - MIN;
+  const rerun = await loadJobs(config, same.done, now);
+  assert.deepEqual(rerun.jobs.map((j) => j.id), [71]);
+  assert.equal(rerun.done[7].at, updated);
+});
