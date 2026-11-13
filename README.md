@@ -3,12 +3,35 @@
 Mods for [Herdr](https://herdr.dev), the desktop app for terminals and coding agents. Made for a setup
 where several coding agents work at once, with self-hosted build machines beside them.
 
+## New: Queue
+
+<img src="queue/preview.png" alt="Queue panel with four waiting notes and two done ones (demo data)" width="360" align="right">
+
+Your next prompts, out of your head and into a side panel. While an agent works, write what you
+want it to do next, paste a screenshot or drop files on it. When the agent is free, **Send** pastes
+the note and its file paths into that agent's terminal.
+
+- **Sends to the right agent.** The line under the field names the agent (its program icon, its
+  title, free or busy). Send never goes to a plain shell and never guesses between two agents.
+- **Screenshots and files.** Paste an image from the clipboard or drop any file; the agent gets
+  each path on its own line.
+- **One queue per space.** Each Herdr space keeps its own notes; one click shows them all.
+- **Nothing lost.** Done notes move down with a check and stay until you delete them, Undo follows
+  every delete, and a draft survives a restart. Notes are plain JSON in `~/.config/herdr-app/queue.json`.
+
+Install it: ask the agent in Herdr to "add the Herdr mod at
+github.com/Lakris2407/herdr-mods/tree/main/queue". More in [queue/](queue/).
+
+<br clear="right">
+
+## Mods
+
 | Mod | What it does |
 | --- | --- |
 | [Agent quota](quota/) | Claude, Codex and other agents' usage limits in the status bar, plus live CPU, RAM and GPU load (`system`). |
 | [Runners](runners/) | What waits for your self-hosted runners and build machines, what runs on them and each machine's load: a status-bar chip, a side panel and a timeline. |
 | [Your stats](stats/) | Your own delivery numbers in a side panel: PRs merged, time to merge, AI share (Claude vs Codex), per-repo breakdown. |
-| [Queue](queue/) | Notes and prompts that wait in a side panel, with files and screenshots: one click sends one to an agent. |
+| [Queue](queue/) **new** | Notes and prompts that wait in a side panel, with files and screenshots: one click sends one to an agent. |
 | [Path menu](path-menu/) | Right-click a terminal to open the files and folders on screen. |
 | [Agents list](agents/) | Herdr's Agents sidebar, changed: sub-agents show their task and how long they have run, the task comes first, and quiet text reads. |
 | [Controls](controls/) | One menu to turn any status-bar block, tab-bar button and side-panel button off and on. |
