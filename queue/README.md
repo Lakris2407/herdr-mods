@@ -24,9 +24,10 @@ The screenshot uses made-up notes.
   The agent gets the text, then each file's path on its own line, so it can open a screenshot itself.
   If you are typing in that terminal, Herdr waits until your draft is gone before it pastes.
   If a send fails, the reason stays on the note until you send again or dismiss it.
-- **Where Send goes** is always written under the field ("Sends to ○ Claude Code · Fix the
-  checkout total · free"), with what the agent does now: a ring when it is free, a dot when it
-  works or waits for your answer. It is the agent whose terminal you used last, or the only agent
+- **Where Send goes** is always written under the field ("Sends to [icon] Fix the
+  checkout total · free"): the icon of the agent's program (Claude, Codex), the agent's own title,
+  and what it does now. A program with no icon gets a ring when it is free and a dot when it works
+  or waits for your answer. It is the agent whose terminal you used last, or the only agent
   in the shown tab. Send never goes to a plain shell, where the text would run as a command, and it
   never picks between two agents for you: click the one you mean, or press **Change** and pick it
   from the list, then send. A pick holds while you stay in the panel. If the agent is in a tab you

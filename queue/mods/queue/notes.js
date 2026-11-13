@@ -126,6 +126,13 @@ export function targetName(agent) {
   return title && title !== program ? `${program} · ${title}` : program;
 }
 
+// What the row shows beside the program's icon: the agent's own title, else the program.
+export function targetTitle(agent) {
+  const program = agent.program?.name ?? agent.app ?? "Agent";
+  const title = (agent.title ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+  return title || program;
+}
+
 // What the agent does now, in a word. "done" (finished while you looked away) is free too.
 export function statusWord(status) {
   if (status === "working") return "working";

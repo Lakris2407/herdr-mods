@@ -2,7 +2,7 @@
 // free. A note can carry files and pasted screenshots; Send pastes the text and the files' paths into
 // the agent's terminal and presses Enter, Copy puts the same text on the clipboard.
 // The notes live in ~/.config/herdr-app/queue.json (store.js); notes.js holds the logic and has no Herdr imports.
-import { View, div, image } from "gpui-kit";
+import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
 import { theme, run, hc, shared, setShared, nextCommand, agents, focused, window, openOverlay, closeOverlay, props as blockProps } from "herdr";
 import { randomUUID } from "crypto";
@@ -10,7 +10,7 @@ import { load, save, removeFile, clipboardFile, filesDir } from "./store.js";
 import { demoNotes, demoAgent } from "./demo.js";
 import {
   makeNote, add, edit, setDone, taken, removeMany, putBack, waiting, finished, filter, dropped, owned, unique,
-  fileName, isImage, promptText, preview, ago, plural, pickTarget, targetName, targetPlace, statusWord, sendError,
+  fileName, isImage, promptText, preview, ago, plural, pickTarget, targetName, targetTitle, targetPlace, statusWord, sendError,
 } from "./notes.js";
 import { readable, roles } from "./colors.js";
 import { leaveSide, imageSize, fit } from "./place.js";
@@ -439,7 +439,15 @@ export default class Queue extends View {
     return d.border(1.5).border_color(ink.ok);
   }
 
-  // "Sends to ○ Claude Code · Fix the checkout total  free", and with more than one agent a list to
+  // The agent's mark: its program's icon (Claude, Codex), which says which one it is in less room than
+  // the name. The status word beside it says what it does. A program with no icon keeps the dot.
+  mark(agent, ink) {
+    const p = agent.program;
+    if (!p?.icon) return this.dot(agent.status, ink);
+    return p.tint ? svg(p.icon).size(13).flex_none().text_color(ink.sub) : image(p.icon).w(13).h(13).flex_none();
+  }
+
+  // "Sends to [icon] Fix the checkout total  free", and with more than one agent a list to
   // pick another from. An agent in a tab you do not see gets a warning: Send presses Enter there.
   targetLine(target, list, t, ink) {
     this.group = "target";
@@ -452,8 +460,8 @@ export default class Queue extends View {
     let row = h_flex().mx(-4).px(4).h(24).gap(6).items_center().rounded(6).text_size(11)
       .child(div().flex_none().text_color(ink.header).child(target ? "Sends to" : "Choose where Send goes"))
       .when(Boolean(target), (e) => e
-        .child(this.dot(target.status, ink))
-        .child(div().min_w(0).truncate().text_color(t.foreground).child(targetName(target)))
+        .child(this.mark(target, ink))
+        .child(div().min_w(0).truncate().text_color(t.foreground).child(targetTitle(target)))
         .when(Boolean(state), (e) => e.child(div().flex_none().text_color(target.status === "blocked" ? ink.fail : ink.header).child(state))))
       .child(div().flex_1())
       .when(canPick, (e) => e.child(div().flex_none().text_color(ink.sub).child(this.picking ? "Close" : target ? "Change" : "Choose")));
@@ -466,8 +474,8 @@ export default class Queue extends View {
     const option = (a) => {
       const on = a.address === target?.address, word = statusWord(a.status), tab = (a.tab_name ?? "").trim();
       return this.action(h_flex().mx(-4).px(4).h(24).gap(6).items_center().rounded(6).text_size(11)
-        .child(this.dot(a.status, ink))
-        .child(div().min_w(0).truncate().text_color(on ? t.foreground : ink.sub).when(on, (e) => e.font_semibold()).child(targetName(a)))
+        .child(this.mark(a, ink))
+        .child(div().min_w(0).truncate().text_color(on ? t.foreground : ink.sub).when(on, (e) => e.font_semibold()).child(targetTitle(a)))
         .child(div().flex_1())
         .child(div().flex_none().max_w("45%").truncate().text_color(ink.header).child([tab, word].filter(Boolean).join(" · "))),
       `target-${a.address}`, () => this.pick(a), t,

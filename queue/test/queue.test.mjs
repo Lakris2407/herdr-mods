@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parse, serialize, makeNote, add, edit, setDone, remove, clearDone, waiting, finished, filter, dropped, owned,
-  fileName, isImage, promptText, preview, ago, pickTarget, targetName, sendError,
+  fileName, isImage, promptText, preview, ago, pickTarget, targetName, targetTitle, sendError,
   taken, removeMany, putBack, statusWord, targetPlace,
 } from "../mods/queue/notes.js";
 import { demoNotes } from "../mods/queue/demo.js";
@@ -100,6 +100,9 @@ test("Send goes to the agent used last, else the only agent of the shown tab, ne
 test("the target is named by its program and its own title", () => {
   assert.equal(targetName({ program: { name: "Claude Code" }, title: "✳ Fix the login test" }), "Claude Code · Fix the login test");
   assert.equal(targetName({ program: { name: "Codex" }, title: "Codex" }), "Codex");
+  // Beside the program's icon the row shows the title alone, else the program.
+  assert.equal(targetTitle({ program: { name: "Claude Code" }, title: "✳ Fix the login test" }), "Fix the login test");
+  assert.equal(targetTitle({ program: { name: "Codex" }, title: "" }), "Codex");
   assert.equal(targetName({ app: "pi", title: "" }), "pi");
 });
 

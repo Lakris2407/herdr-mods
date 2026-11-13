@@ -9,7 +9,7 @@ const runtime = "__queuePersistenceTest";
 const host = `data:text/javascript,${encodeURIComponent(`
   export class View {}
   export const leaveSide = null, imageSize = null, fit = null;
-  export const div = null, image = null, h_flex = null, v_flex = null;
+  export const div = null, image = null, svg = null, h_flex = null, v_flex = null;
   export const TextareaState = null, Textarea = null, InputState = null, Input = null;
   export const theme = null, run = null, hc = null, exec = null, shared = null;
   export const nextCommand = null, layout = null, agents = null, focused = null;
