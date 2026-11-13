@@ -22,18 +22,26 @@ The screenshot uses made-up notes.
 - **Send.** Pastes the note into an agent's terminal and presses Enter, then marks the note done.
   The agent gets the text, then each file's path on its own line, so it can open a screenshot itself.
   If you are typing in that terminal, Herdr waits until your draft is gone before it pastes.
-- **Where Send goes** is always written under the field ("Send goes to Claude Code · Fix the
-  checkout total"). It is the agent whose terminal you used last, or the only agent in the shown
-  tab. Send never goes to a plain shell, where the text would run as a command, and it never picks
-  between two agents for you: click the one you mean.
+  If a send fails, the reason stays on the note until you send again or dismiss it.
+- **Where Send goes** is always written under the field ("Sends to ○ Claude Code · Fix the
+  checkout total · free"), with what the agent does now: a ring when it is free, a dot when it
+  works or waits for your answer. It is the agent whose terminal you used last, or the only agent
+  in the shown tab. Send never goes to a plain shell, where the text would run as a command, and it
+  never picks between two agents for you: click the one you mean, or press **Change** and pick it
+  from the list, then send. A pick holds while you stay in the panel. If the agent is in a tab you
+  do not see, the line says which tab.
 - **Copy** puts the same text on the clipboard, for a chat outside Herdr, and marks the note done.
-- **Edit** moves the note back into the field; **Save** or **Cancel** ends the edit.
+- **Edit** moves the note back into the field; **Save** or **Cancel** ends the edit. A draft you
+  had in the field is set aside and comes back after.
 - **Done** notes move to a list at the bottom. **Restore** puts one back in the queue, **Delete**
-  removes it for good, and **Clear done** removes all of them. Only a done note can be deleted, so
-  one wrong click never loses a note. Deleting a note deletes its pasted images too; files you
-  dropped are never touched.
+  removes it, and **Clear done** removes all of them (under a search: the ones the search shows).
+  Only a done note can be deleted, and **Undo** shows for about ten seconds after a delete, so one
+  wrong click never loses a note. Deleting a note deletes its pasted images too, once Undo is gone;
+  files you dropped are never touched.
 - **Search** shows above the list once it holds six notes. Every word you type must be in the note
   or in one of its file names.
+- If a change cannot be saved (another window changed the notes, or the disk refused), the panel
+  says so until you dismiss it, and the text you wrote goes back in the field.
 - A long note shows its first six lines; click the text to see all of it.
 
 ## Data
@@ -55,9 +63,11 @@ shows made-up notes and reads, saves and sends nothing. The screenshot above use
 ## Keyboard
 
 The panel can take the keyboard: move onto it with `pane.go` (your pane-navigation keys) like any
-pane. A line under the header then shows the keys. ↑ and ↓ move a ring over every button, Enter or
-Space presses the one with the ring, N puts the cursor in the field, ← and → move to the next pane
-that way, and Escape goes back toward your terminals. In the field, Escape gives the keyboard back
+pane. A line at the bottom then shows the keys. ↑ and ↓ move a ring over every button, file and
+long note, J and K jump to the next and the previous note, Enter or Space presses the one with the
+ring, N puts the cursor in the field, / in the search, ← and → move to the next pane that way, and
+Escape goes back toward your terminals. After Send, Done or Delete the ring lands on the button
+that takes it back (Restore, Undo), so a second Enter never sends or deletes the next note. In the field, Escape gives the keyboard back
 to the panel. `herdr-app do queue.new` puts the cursor in the field from anywhere, so you can bind
 a key to it.
 

@@ -13,4 +13,4 @@ export function demoNotes(now = Date.now()) {
   ];
 }
 
-export const demoAgent = { address: "demo", tab: "demo", program: { name: "Claude Code" }, title: "Fix the checkout total" };
+export const demoAgent = { address: "demo", tab: "demo", tab_name: "shop", status: "idle", program: { name: "Claude Code" }, title: "Fix the checkout total" };

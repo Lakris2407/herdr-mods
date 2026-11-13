@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   parse, serialize, makeNote, add, edit, setDone, remove, clearDone, waiting, finished, filter, dropped, owned,
   fileName, isImage, promptText, preview, ago, pickTarget, targetName, sendError,
+  taken, removeMany, putBack, statusWord, targetPlace,
 } from "../mods/queue/notes.js";
 import { demoNotes } from "../mods/queue/demo.js";
 
@@ -100,6 +101,29 @@ test("the target is named by its program and its own title", () => {
   assert.equal(targetName({ program: { name: "Claude Code" }, title: "✳ Fix the login test" }), "Claude Code · Fix the login test");
   assert.equal(targetName({ program: { name: "Codex" }, title: "Codex" }), "Codex");
   assert.equal(targetName({ app: "pi", title: "" }), "pi");
+});
+
+test("the target line says what the agent does, and where it is when it is out of view", () => {
+  assert.equal(statusWord("idle"), "free");
+  assert.equal(statusWord("done"), "free");
+  assert.equal(statusWord("working"), "working");
+  assert.equal(statusWord("blocked"), "waits for your answer");
+  assert.equal(statusWord(undefined), "");
+  assert.equal(targetPlace({ tab: "x", tab_name: "api" }, "x"), "");
+  assert.equal(targetPlace({ tab: "y", tab_name: " api " }, "x"), 'the tab "api"');
+  assert.equal(targetPlace({ tab: "y" }, "x"), "another tab");
+});
+
+test("Undo puts deleted notes back where they were", () => {
+  const notes = [note("a", "1"), note("b", "2", [], 10), note("c", "3"), note("d", "4", [], 30)];
+  const gone = taken(notes, ["b", "d"]);
+  const left = removeMany(notes, ["b", "d"]);
+  assert.deepEqual(left.map((n) => n.id), ["a", "c"]);
+  assert.deepEqual(putBack(left, gone), notes);
+  // A note added in between stays on top, and nothing comes back twice.
+  assert.deepEqual(putBack([note("n", "new"), ...left], gone).map((n) => n.id), ["n", "b", "a", "d", "c"]);
+  assert.deepEqual(putBack(notes, gone), notes);
+  assert.deepEqual(putBack([], gone).map((n) => n.id), ["b", "d"]);
 });
 
 test("a failed send says what to do", () => {

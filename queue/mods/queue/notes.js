@@ -40,6 +40,20 @@ export const remove = (notes, id) => notes.filter((n) => n.id !== id);
 
 export const clearDone = (notes) => notes.filter((n) => !n.doneAt);
 
+// Delete takes notes out together with where they were, so Undo can put each one back in its place.
+export const taken = (notes, ids) => notes.map((note, index) => ({ note, index })).filter((g) => ids.includes(g.note.id));
+
+export function removeMany(notes, ids) {
+  const gone = new Set(ids);
+  return notes.filter((n) => !gone.has(n.id));
+}
+
+export function putBack(notes, gone) {
+  const out = removeMany(notes, gone.map((g) => g.note.id));
+  for (const g of [...gone].sort((a, b) => a.index - b.index)) out.splice(Math.min(g.index, out.length), 0, g.note);
+  return out;
+}
+
 export const waiting = (notes) => notes.filter((n) => !n.doneAt);
 
 // The note finished last comes first.
@@ -110,6 +124,20 @@ export function targetName(agent) {
   const program = agent.program?.name ?? agent.app ?? "Agent";
   const title = (agent.title ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
   return title && title !== program ? `${program} · ${title}` : program;
+}
+
+// What the agent does now, in a word. "done" (finished while you looked away) is free too.
+export function statusWord(status) {
+  if (status === "working") return "working";
+  if (status === "blocked") return "waits for your answer";
+  return status === "idle" || status === "done" ? "free" : "";
+}
+
+// Where the agent is when it is not in the tab you see: its tab's name, or "" when it is in view.
+export function targetPlace(agent, tab) {
+  if (agent.tab === tab) return "";
+  const name = (agent.tab_name ?? "").trim();
+  return name ? `the tab "${name}"` : "another tab";
 }
 
 // Why `hc send` failed, as one sentence. hc prints `{ "error": { "message", "kind" } }`.
