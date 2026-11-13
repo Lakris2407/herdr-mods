@@ -26,6 +26,7 @@ const PANELS = [
   ["github", "GitHub", "mods/github/github.svg"],
   ["stats", "Stats", "mods/stats/stats.svg"],
   ["runners", "Runners", "mods/runners/runners.svg"],
+  ["queue", "Queue", "mods/queue/queue.svg"],
 ];
 const HIDDEN = "tabs-plus.hidden";
 
@@ -105,7 +106,7 @@ export default class Tabs extends View {
       : 10;
     const panel = find(root, "panel"), body = find(root, "panel-body");
     const hidden = shared(HIDDEN) ?? [];
-    const enabled = [...(shared("workspace.panels") ?? ["files", "changes"]), "github", "stats", "runners"].filter(id => !hidden.includes(id));
+    const enabled = [...(shared("workspace.panels") ?? ["files", "changes"]), "github", "stats", "runners", "queue"].filter(id => !hidden.includes(id));
     // A hidden button's panel closes too, so nothing is left open that you can't reach.
     if (panel && !panel.hidden && body?.active && PANELS.some(([id]) => id === body.active) && !enabled.includes(body.active)) run("layout.hide", { id: "panel" });
     this.syncPanel(space, panel, body, enabled);
