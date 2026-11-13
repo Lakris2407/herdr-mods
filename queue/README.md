@@ -42,6 +42,11 @@ The screenshot uses made-up notes.
   Only a done note can be deleted, and **Undo** shows for about ten seconds after a delete, so one
   wrong click never loses a note. Deleting a note deletes its pasted images too, once Undo is gone;
   files you dropped are never touched.
+- **Each space has its own queue.** A note belongs to the space that showed when you wrote it, and
+  the panel lists the notes of the space you see. The button at the top right names that space; a
+  click shows the notes of every space, each with its space's name, and a second click goes back.
+  This is also where the notes of a closed space are. A note from before notes had a space shows
+  in every space.
 - **Search** shows above the list once it holds six notes. Every word you type must be in the note
   or in one of its file names.
 - If a change cannot be saved (another window changed the notes, or the disk refused), the panel

@@ -2,7 +2,7 @@
 const MIN = 60000;
 
 export function demoNotes(now = Date.now()) {
-  const note = (id, min, text, files = [], doneMin = null) => ({ id, text, files, createdAt: now - min * MIN, doneAt: doneMin == null ? null : now - doneMin * MIN });
+  const note = (id, min, text, files = [], doneMin = null) => ({ id, text, files, createdAt: now - min * MIN, doneAt: doneMin == null ? null : now - doneMin * MIN, space: null, spaceName: null });
   return [
     note("a", 2, "The checkout total is wrong when a coupon and free shipping are both active. Reproduce it with the cart in the screenshot, then fix it and add a test.", ["/tmp/demo/cart-total.png"]),
     note("b", 14, "After the fix: run the full backend suite once more and tell me which tests are slow."),

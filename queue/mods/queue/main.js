@@ -4,12 +4,12 @@
 // The notes live in ~/.config/herdr-app/queue.json (store.js); notes.js holds the logic and has no Herdr imports.
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
-import { theme, run, hc, shared, setShared, nextCommand, agents, focused, window, openOverlay, closeOverlay, props as blockProps } from "herdr";
+import { theme, run, hc, shared, setShared, nextCommand, agents, spaces, focused, window, openOverlay, closeOverlay, props as blockProps } from "herdr";
 import { randomUUID } from "crypto";
 import { load, save, removeFile, clipboardFile, filesDir } from "./store.js";
 import { demoNotes, demoAgent } from "./demo.js";
 import {
-  makeNote, add, edit, setDone, taken, removeMany, putBack, waiting, finished, filter, dropped, owned, unique,
+  makeNote, add, edit, setDone, taken, removeMany, putBack, waiting, finished, filter, inSpace, dropped, owned, unique,
   fileName, isImage, promptText, preview, ago, plural, pickTarget, targetName, targetTitle, targetPlace, statusWord, sendError,
 } from "./notes.js";
 import { readable, roles } from "./colors.js";
@@ -58,6 +58,7 @@ export default class Queue extends View {
     // `{ "demo": true }` in the block's props: made-up notes for screenshots; nothing is read, saved or sent.
     this.demo = Boolean((props ?? blockProps())?.demo);
     this.notes = this.demo ? demoNotes() : [];
+    try { this.all = !this.demo && localStorage.getItem("scope") === "all"; } catch { this.all = false; }
     this.fileText = null;   // the file as last read or written: what the next save expects to replace
     this.ready = this.demo;
     this.files = [];        // the composer's files
@@ -182,7 +183,7 @@ export default class Queue extends View {
       // If another window removed the original, keep this edit as a new note.
       const saved = await this.commit(cx, (notes) => id && notes.some((n) => n.id === id)
         ? edit(notes, id, text, files)
-        : add(notes, makeNote(randomUUID(), text, files, Date.now())));
+        : add(notes, makeNote(randomUUID(), text, files, Date.now(), this.here)));
       if (saved && this.editing === id && this.draft.value() === raw &&
           this.files.length === files.length && this.files.every((f, i) => f === files[i])) {
         this.endEdit();
@@ -518,6 +519,8 @@ export default class Queue extends View {
     this.group = n.id;
     const now = Date.now(), done = Boolean(n.doneAt), busy = this.sending === n.id;
     const check = this.check(n, done, now, t, ink);
+    // With every space's notes in view, a note says which space it is from.
+    const from = this.all && n.space ? shared("space.labels")?.[n.space]?.name ?? spaces().find((s) => s.id === n.space)?.name ?? n.spaceName : null;
     const where = target ? targetName(target) : null, fail = done ? null : this.failed.get(n.id);
     const text = n.text ? this.noteText(n, t, ink) : null;
     const files = n.files.length ? this.fileRow(n.files, `file-${n.id}`, t, ink) : null;
@@ -545,7 +548,7 @@ export default class Queue extends View {
         .when(Boolean(files), (e) => e.child(files))
         .when(Boolean(failure), (e) => e.child(failure))
         .child(h_flex().flex_wrap().mx(-6).items_center()
-          .child(div().flex_1().min_w(0).pl(6).truncate().text_size(11).text_color(ink.hint).child(done ? `Done ${ago(n.doneAt, now)}` : ago(n.createdAt, now)))
+          .child(div().flex_1().min_w(0).pl(6).truncate().text_size(11).text_color(ink.hint).child(`${done ? `Done ${ago(n.doneAt, now)}` : ago(n.createdAt, now)}${from ? ` · ${from}` : ""}`))
           .children(actions)));
   }
 
@@ -559,14 +562,23 @@ export default class Queue extends View {
         { label: "Clear the search", edge: t.background })));
   }
 
+  // The shown space, by the name the spaces list gives it.
+  space() {
+    const s = this.demo ? null : spaces().find((x) => x.active);
+    return s ? { id: s.id, name: shared("space.labels")?.[s.id]?.name ?? s.name } : null;
+  }
+
+  // The notes the panel lists: those of the shown space, or all of them.
+  mine() { return this.all ? this.notes : inSpace(this.notes, this.here?.id); }
+
   body(t, ink) {
     const target = this.target(), list = this.demo ? [demoAgent] : agents();
-    const searching = Boolean(this.query.trim());
-    const shown = filter(this.notes, this.query), open = waiting(shown), done = finished(shown);
+    const searching = Boolean(this.query.trim()), mine = this.mine();
+    const shown = filter(mine, this.query), open = waiting(shown), done = finished(shown);
     const none = searching ? "No note matches the search."
-      : this.notes.length ? "The queue is empty. The notes below are done."
+      : mine.length ? "The queue is empty. The notes below are done."
         : "No notes yet. Write a prompt now, and send it when an agent is free. Send pastes the note into the agent and presses Enter.";
-    this.searchShown = this.notes.length >= SEARCH_FROM || Boolean(this.query);
+    this.searchShown = mine.length >= SEARCH_FROM || Boolean(this.query);
     const composer = this.composer(t, ink), where = this.targetLine(target, list, t, ink);
     const search = this.searchShown ? this.searchField(t, ink) : null;
     const waitingList = v_flex().role("list").accessibility_label("Waiting notes").gap(10).children(open.map((n) => this.note(n, target, t, ink)));
@@ -603,11 +615,20 @@ export default class Queue extends View {
     this.ink = ink; this.actions = []; this.ids = []; this.groups = [];
     if (!this.demo && this.rev !== undefined && shared(REV) && shared(REV) !== this.rev) { this.rev = shared(REV); this.stale = true; }
     if (this.rev === undefined) this.rev = shared(REV) ?? null;
-    const count = waiting(this.notes).length;
+    this.here = this.space();
+    const count = waiting(this.mine()).length;
     const flash = this.flash && Date.now() <= this.flash.until ? this.flash : null;
     const status = flash?.text ?? (this.saving ? "Saving…" : this.sending ? "Sending…" : count ? `${count} waiting` : "");
     const tone = { ok: ink.ok, warn: ink.warn, fail: ink.fail }[flash?.tone] ?? ink.header;
     this.group = "top";
+    // Each space has its own queue. The button names the space, and a click shows every space's notes.
+    const scope = this.here ? this.button(this.all ? "All spaces" : this.here.name, "queue-scope", () => {
+      this.all = !this.all;
+      try { localStorage.setItem("scope", this.all ? "all" : "space"); } catch {}
+    }, t, ink, {
+      label: this.all ? `The notes of every space show. Show only ${this.here.name}` : `The notes of ${this.here.name} show. Show every space`,
+      tip: this.all ? `Show only the notes of ${this.here.name}` : "Show the notes of every space", edge: t.background,
+    }) : null;
     const body = v_flex().id("queue-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(10)
       .when(Boolean(this.error), (e) => e
         .child(div().px(2).role("alert").text_size(11).text_color(ink.fail).whitespace_normal().child(this.error))
@@ -630,7 +651,8 @@ export default class Queue extends View {
       .text_color(t.foreground).text_size(13)
       .child(h_flex().h(42).flex_none().px(12).gap(8).items_center().border_b(1).border_color(t.border)
         .child(div().flex_none().font_semibold().child("Queue"))
-        .child(div().flex_1().min_w(0).truncate().role("status").text_size(11).text_color(tone).child(status)))
+        .child(div().flex_1().min_w(0).truncate().role("status").text_size(11).text_color(tone).child(status))
+        .when(Boolean(scope), (e) => e.child(scope.max_w("50%").truncate())))
       .child(body)
       // The keys, shown only while the panel has the keyboard: at the bottom, so the list does not move.
       .when(this.handle.is_focused(), (e) => e.child(div().flex_none().px(12).py(5).border_t(1).border_color(t.border).whitespace_normal()

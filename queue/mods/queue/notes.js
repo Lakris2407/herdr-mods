@@ -18,12 +18,20 @@ export function parse(text) {
     files: Array.isArray(n.files) ? n.files.filter((f) => typeof f === "string") : [],
     createdAt: Number(n.createdAt) || 0,
     doneAt: Number(n.doneAt) || null,
+    space: typeof n.space === "string" ? n.space : null,
+    spaceName: typeof n.spaceName === "string" ? n.spaceName : null,
   }));
 }
 
 export const serialize = (notes) => `${JSON.stringify({ version: VERSION, notes }, null, 2)}\n`;
 
-export const makeNote = (id, text, files, now) => ({ id, text: text.trim(), files: unique(files), createdAt: now, doneAt: null });
+// A note belongs to the space it was written in (`space`: its id). The name is kept beside it, so
+// the note still says where it came from after that space is closed.
+export const makeNote = (id, text, files, now, space = null) =>
+  ({ id, text: text.trim(), files: unique(files), createdAt: now, doneAt: null, space: space?.id ?? null, spaceName: space?.name ?? null });
+
+// The notes of one space. A note with no space (written before notes had one) shows in every space.
+export const inSpace = (notes, id) => (id ? notes.filter((n) => !n.space || n.space === id) : notes);
 
 export const unique = (list) => [...new Set(list)];
 

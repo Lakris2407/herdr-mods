@@ -12,7 +12,7 @@ const host = `data:text/javascript,${encodeURIComponent(`
   export const div = null, image = null, svg = null, h_flex = null, v_flex = null;
   export const TextareaState = null, Textarea = null, InputState = null, Input = null;
   export const theme = null, run = null, hc = null, exec = null, shared = null;
-  export const nextCommand = null, layout = null, agents = null, focused = null;
+  export const nextCommand = null, layout = null, agents = null, spaces = null, focused = null;
   export const settings = null, window = null, openOverlay = null, closeOverlay = null, props = null;
   export const setShared = (...a) => globalThis.${runtime}.setShared(...a);
   export const load = (...a) => globalThis.${runtime}.load(...a);

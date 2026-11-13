@@ -51,7 +51,8 @@ presses Enter.
 
 ## How it behaves
 
-- Notes are `{ id, text, files, createdAt, doneAt }` in `queue.json` in Herdr's home, written as
+- Notes are `{ id, text, files, createdAt, doneAt, space, spaceName }` (`space`: the id of the space the
+  note was written in, null on an old note, which shows in every space) in `queue.json` in Herdr's home, written as
   `{ "version": 1, "notes": [...] }`. A new note goes on top. Changes appear after a successful
   save; mutation buttons wait while a save or reload runs. Each save names the text it expects to replace
   (`writeTextFile`'s third argument), so a change made by another copy is never written over: the

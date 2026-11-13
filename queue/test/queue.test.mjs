@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  parse, serialize, makeNote, add, edit, setDone, remove, clearDone, waiting, finished, filter, dropped, owned,
+  parse, serialize, makeNote, add, edit, setDone, remove, clearDone, waiting, finished, filter, inSpace, dropped, owned,
   fileName, isImage, promptText, preview, ago, pickTarget, targetName, targetTitle, sendError,
   taken, removeMany, putBack, statusWord, targetPlace,
 } from "../mods/queue/notes.js";
 import { demoNotes } from "../mods/queue/demo.js";
 
-const note = (id, text, files = [], doneAt = null) => ({ id, text, files, createdAt: 1000, doneAt });
+const note = (id, text, files = [], doneAt = null) => ({ id, text, files, createdAt: 1000, doneAt, space: null, spaceName: null });
 
 test("a missing or empty file is an empty queue; a broken one is an error", () => {
   assert.deepEqual(parse(null), []);
@@ -20,13 +20,25 @@ test("notes survive a save and a load; rows that are not notes are left out", ()
   const notes = [note("a", "one", ["/x/a.png"]), note("b", "two", [], 2000)];
   assert.deepEqual(parse(serialize(notes)), notes);
   assert.deepEqual(parse(JSON.stringify({ notes: [{ id: 1, text: "x" }, null, { id: "c", text: "ok", files: "no" }] })),
-    [{ id: "c", text: "ok", files: [], createdAt: 0, doneAt: null }]);
+    [{ id: "c", text: "ok", files: [], createdAt: 0, doneAt: null, space: null, spaceName: null }]);
 });
 
 test("a new note goes on top, trimmed, with each file once", () => {
   const n = makeNote("n", "  hello \n", ["/a", "/a", "/b"], 5);
-  assert.deepEqual(n, { id: "n", text: "hello", files: ["/a", "/b"], createdAt: 5, doneAt: null });
+  assert.deepEqual(n, { id: "n", text: "hello", files: ["/a", "/b"], createdAt: 5, doneAt: null, space: null, spaceName: null });
   assert.deepEqual(add([note("a", "old")], n).map((x) => x.id), ["n", "a"]);
+});
+
+test("a note belongs to its space; a note with no space shows in every space", () => {
+  const here = makeNote("h", "here", [], 1, { id: "sp1", name: "shop" });
+  const there = makeNote("t", "there", [], 2, { id: "sp2", name: "blog" });
+  const old = makeNote("o", "old", [], 3);
+  assert.deepEqual([here.space, here.spaceName], ["sp1", "shop"]);
+  assert.deepEqual(parse(serialize([here])), [here]);
+  assert.deepEqual(inSpace([here, there, old], "sp1").map((n) => n.id), ["h", "o"]);
+  assert.deepEqual(inSpace([here, there, old], null).map((n) => n.id), ["h", "t", "o"]);
+  // An edit keeps the note in its space.
+  assert.equal(edit([here], "h", "new", [])[0].space, "sp1");
 });
 
 test("edit, done, restore, delete and clear touch only their note", () => {
