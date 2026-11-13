@@ -116,9 +116,12 @@ The Issues tab, after a critique of a bot-heavy backlog (45 open, 8 of them `[gr
   `t.raised` (it was 2.9:1).
 - A tab with an automatic number ("1") shows its agent's title (its task), else the program. A
   name someone typed stays.
-- "+" sits inside the tab row, right after the last tab, with a "New tab" tooltip; a 1 px divider in
-  `t.border` comes before the panel buttons. Before, the tab row took all free room and "+" landed
-  beside the panel buttons, so it read as "add a panel".
+- A tab whose name only repeats its program ("Claude Code") is the icon alone, with the name in the
+  tooltip. The status mark and the active tab's close icon stay. A typed name or an agent's title
+  still shows.
+- "+" sits before the first tab, outside the scrolling row, with a "New tab" tooltip, so it stays in
+  view with any number of tabs. A 1 px divider in `t.border` comes before the panel buttons. In
+  Herdr's own tab bar "+" lands beside the panel buttons, so it reads as "add a panel".
 - One side panel at a time: when the panel stack and Skillshare's own column are both open, the one
   opened earlier closes. Skillshare tracks its own `skillshare-panel` node, so moving it into
   `panel-body` would mean changing that mod too.
