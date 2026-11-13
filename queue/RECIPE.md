@@ -51,14 +51,14 @@ presses Enter.
 ## How it behaves
 
 - Notes are `{ id, text, files, createdAt, doneAt }` in `queue.json` in Herdr's home, written as
-  `{ "version": 1, "notes": [...] }`. A new note goes on top. Every change shows at once and is then
-  saved; saves run one after the other. Each save names the text it expects to replace
+  `{ "version": 1, "notes": [...] }`. A new note goes on top. Changes appear after a successful
+  save; mutation buttons wait while a save or reload runs. Each save names the text it expects to replace
   (`writeTextFile`'s third argument), so a change made by another copy is never written over: the
-  panel says the change was not saved, puts the text of an add or an edit back in the field, and
+  panel says the change was not saved, keeps the text and attachments in the field, and
   loads the file again. After a save the panel sets shared
   state `queue.rev`, and every other copy loads the file within three seconds.
 - A file that is not valid JSON shows an error and blocks every change until it is fixed.
-- The draft in the field is kept in `localStorage` (`draft`) until it is added. Edit sets the
+- The draft in the field is kept in `localStorage` (`draft`) until its save succeeds. Edit sets the
   draft aside and puts it back when the edit is saved or cancelled.
 - Dropped files (`on_drop` on the root) are kept as paths. A paste with no text (`paste_other`)
   runs `osascript`: the clipboard's PNG is written to `queue-files/<uuid>.png`; without one, the

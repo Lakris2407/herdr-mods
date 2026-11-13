@@ -13,6 +13,7 @@ The screenshot uses made-up notes.
 
 - **Write.** Type in the field at the top and press **Add** (Cmd+Enter in the field; Ctrl+Enter on
   Linux and Windows). Enter makes a new line. A draft you have not added yet survives a restart.
+  Add clears it only after the note is saved; a failed save keeps the draft and attachments.
 - **Attach.** Drop files anywhere on the panel, or paste in the field: a screenshot on the clipboard
   becomes an image under the note, and a file copied in Finder is attached as itself. A dropped
   file is not copied: the note keeps its path. A pasted image is saved in
@@ -32,7 +33,8 @@ The screenshot uses made-up notes.
   do not see, the line says which tab.
 - **Copy** puts the same text on the clipboard, for a chat outside Herdr, and marks the note done.
 - **Edit** moves the note back into the field; **Save** or **Cancel** ends the edit. A draft you
-  had in the field is set aside and comes back after.
+  had in the field is set aside and comes back after. If another window deleted the original while
+  you edited it, Save keeps your edit as a new note.
 - **Done** notes move to a list at the bottom. **Restore** puts one back in the queue, **Delete**
   removes it, and **Clear done** removes all of them (under a search: the ones the search shows).
   Only a done note can be deleted, and **Undo** shows for about ten seconds after a delete, so one
@@ -41,7 +43,7 @@ The screenshot uses made-up notes.
 - **Search** shows above the list once it holds six notes. Every word you type must be in the note
   or in one of its file names.
 - If a change cannot be saved (another window changed the notes, or the disk refused), the panel
-  says so until you dismiss it, and the text you wrote goes back in the field.
+  says so until you dismiss it, and the text you wrote stays in the field.
 - A long note shows its first six lines; click the text to see all of it.
 
 ## Data
@@ -52,7 +54,7 @@ Back the two up together. The mod runs `hc send` (Herdr's own tool) to send a no
 to read a pasted image, and sends nothing over the network.
 
 If the file is not valid JSON, the panel says so and saves nothing until you fix or remove it, so
-it never writes over notes it could not read.
+it never writes over notes it could not read. Click **Retry** after repairing the file.
 
 Files on another machine: a note keeps paths on this computer. An agent in a space on another
 machine gets the text and the paths, but it cannot open those files there.

@@ -48,7 +48,7 @@ const stop = (_e, cx) => cx.stop_propagation();
 // The key that adds a note from the field, as this platform writes it.
 const addKey = () => (window()?.platform === "macos" ? "⌘↵" : "Ctrl+Enter");
 
-const NOT_SAVED = "Not saved: the notes file changed in another window, or the disk refused. The list shows the file again.";
+const NOT_SAVED = "Not saved. The list still shows the last saved notes; your draft stays in the field.";
 
 export default class Queue extends View {
   init(props, cx) {
@@ -120,43 +120,50 @@ export default class Queue extends View {
   }
 
   reload(cx) {
+    // A reload must not replace the snapshot while a write is in flight.
+    if (this.saving || this.loading || this.sending) { this.stale = true; return; }
+    this.loading = true;
     cx.spawn(async (cx) => {
       try {
         const file = await load();
         this.notes = file.notes; this.fileText = file.text; this.ready = true; this.error = null;
-      } catch (e) { this.error = `${e.message ?? e}. Fix or remove the file; nothing is saved until then.`; }
+      } catch (e) {
+        this.ready = false;
+        this.error = `${e.message ?? e}. Fix or remove the file, then retry; nothing is saved until then.`;
+      } finally { this.loading = false; }
       cx.notify();
     });
   }
 
   say(text, tone = "plain") { this.flash = { text, tone, until: Date.now() + FLASH }; }
 
-  // Every change goes through here: the list changes at once, then the file is written. Saves run
-  // one after the other. A pasted image leaves the disk only after the save that dropped its note,
-  // and not while Undo can still bring the note back. `lost` is the text a failed save gives back.
-  commit(cx, change, lost = null) {
-    if (!this.ready) return;
-    const before = this.notes;
-    this.notes = change(before);
+  // Publish a change only after its snapshot is on disk. While writing, controls are disabled;
+  // a failed write leaves the composer intact and reloads the other window's version.
+  commit(cx, change) {
+    if (!this.ready || this.saving || this.loading) return Promise.resolve(false);
+    const before = this.notes, after = change(before);
+    if (this.demo) { this.notes = after; cx.notify(); return Promise.resolve(true); }
+    this.saving = true;
+    this.pendingNotes = after;
     cx.notify();
-    if (this.demo) return;
-    const kept = new Set([...this.files, ...(this.stash?.files ?? []), ...(this.trash?.gone ?? []).flatMap((g) => g.note.files)]);
-    const gone = dropped(before, this.notes).filter((f) => owned(f, filesDir()) && !kept.has(f));
-    const earlier = this.saving ?? Promise.resolve();
-    this.saving = new Promise((done) => cx.spawn(async (cx) => {
-      await earlier;
+    return new Promise((done) => cx.spawn(async (cx) => {
+      let saved = false;
       try {
-        this.fileText = await save(this.notes, this.fileText);
-        this.rev = Date.now(); setShared(REV, this.rev);
+        this.fileText = await save(after, this.fileText);
+        this.notes = after;
+        this.rev = randomUUID(); setShared(REV, this.rev);
         this.unsaved = null;
-        for (const f of gone) removeFile(f);
-      } catch {
-        // The file changed under us (another window), or the disk refused: show what is on disk.
-        this.unsaved = lost ? `${NOT_SAVED} Your text is back in the field.` : NOT_SAVED;
-        if (lost) this.giveBack(lost);
+        const kept = new Set([...this.files, ...(this.stash?.files ?? []), ...(this.trash?.gone ?? []).flatMap((g) => g.note.files)]);
+        for (const f of dropped(before, after)) if (owned(f, filesDir()) && !kept.has(f)) removeFile(f);
+        saved = true;
+      } catch (e) {
+        this.unsaved = `${NOT_SAVED} ${e.message ?? e}`;
+        this.ready = false;
         this.stale = true;
+      } finally {
+        this.saving = false; this.pendingNotes = null;
+        cx.notify(); done(saved);
       }
-      cx.notify(); done();
     }));
   }
 
@@ -164,39 +171,34 @@ export default class Queue extends View {
     try { if (!this.demo && !this.editing) localStorage.setItem("draft", this.draft.value()); } catch {}
   }
 
-  // The text of a change that was not saved goes back in the field, above whatever is there now.
-  giveBack(lost) {
-    const join = (a, b) => [a, b].filter((s) => s.trim()).join("\n\n");
-    if (this.editing) {
-      this.stash = { text: join(lost.text, this.stash?.text ?? ""), files: unique([...lost.files, ...(this.stash?.files ?? [])]) };
-      return;
-    }
-    this.files = unique([...lost.files, ...this.files]);
-    this.draft.set_value(join(lost.text, this.draft.value()));
-    this.keepDraft();
-  }
-
-  // The composer's Add or Save.
+  // Keep the draft (and its attachments) until the corresponding write succeeds. Typing while
+  // saving is allowed: a newer draft must not be cleared by the earlier write's completion.
   submit(cx) {
-    const text = this.draft.value().trim(), files = this.files;
+    if (!this.ready || this.saving || this.loading || this.submitting || this.sending) return;
+    const raw = this.draft.value(), text = raw.trim(), files = [...this.files], id = this.editing;
     if (!text && !files.length) return;
-    if (this.editing) {
-      const id = this.editing;
-      this.endEdit();
-      this.cur = `edit-${id}`;
-      this.commit(cx, (notes) => edit(notes, id, text, files), { text, files });
-    } else {
-      this.files = [];
-      this.draft.set_value("");
-      try { if (!this.demo) localStorage.removeItem("draft"); } catch {}
-      this.commit(cx, (notes) => add(notes, makeNote(randomUUID(), text, files, Date.now())), { text, files });
-    }
+    this.submitting = true;
+    cx.spawn(async (cx) => {
+      // If another window removed the original, keep this edit as a new note.
+      const saved = await this.commit(cx, (notes) => id && notes.some((n) => n.id === id)
+        ? edit(notes, id, text, files)
+        : add(notes, makeNote(randomUUID(), text, files, Date.now())));
+      if (saved && this.editing === id && this.draft.value() === raw &&
+          this.files.length === files.length && this.files.every((f, i) => f === files[i])) {
+        this.endEdit();
+        if (id) this.cur = `edit-${id}`;
+        else { try { if (!this.demo) localStorage.removeItem("draft"); } catch {} }
+      }
+      this.submitting = false;
+      cx.notify();
+    });
   }
 
   // Edit borrows the field: the draft you had not added is set aside, and comes back after.
   startEdit(note) {
+    if (this.saving || this.loading || this.submitting || this.sending) return;
     if (this.editing) this.dropComposerFiles();
-    else this.stash = { text: this.draft.value(), files: this.files };
+    else this.stash = { text: this.draft.value(), files: [...this.files] };
     this.editing = note.id; this.files = [...note.files];
     this.draft.set_value(note.text);
     this.draft.focus();
@@ -210,6 +212,7 @@ export default class Queue extends View {
   }
 
   cancelEdit() {
+    if (this.saving || this.submitting) return;
     const id = this.editing;
     this.dropComposerFiles();
     this.endEdit();
@@ -219,13 +222,14 @@ export default class Queue extends View {
   // A pasted image that no note holds goes from the disk when the composer lets go of it.
   dropComposerFiles(only = null) {
     if (this.demo) return;
-    const held = new Set([...this.notes.flatMap((n) => n.files), ...(this.stash?.files ?? [])]);
+    const held = new Set([...[...this.notes, ...(this.pendingNotes ?? [])].flatMap((n) => n.files), ...(this.stash?.files ?? [])]);
     for (const f of only ?? this.files) if (owned(f, filesDir()) && !held.has(f)) removeFile(f);
   }
 
   // Delete, with a way back: the notes leave the list and the file now, their pasted images only
   // when Undo's time is up. (If Herdr quits before that, the images stay in queue-files/.)
   deleteNotes(ids, cx) {
+    if (!this.ready || this.saving || this.loading || this.sending) return;
     if (!ids.length) return;
     this.emptyTrash();
     this.trash = { gone: taken(this.notes, ids), until: Date.now() + UNDO };
@@ -235,6 +239,7 @@ export default class Queue extends View {
   }
 
   undo(cx) {
+    if (!this.ready || this.saving || this.loading || this.sending) return;
     const gone = this.trash?.gone ?? [];
     this.trash = null;
     if (!gone.length) return;
@@ -246,7 +251,7 @@ export default class Queue extends View {
     const gone = this.trash?.gone ?? [];
     this.trash = null;
     if (this.demo) return;
-    const held = new Set([...this.notes.flatMap((n) => n.files), ...this.files, ...(this.stash?.files ?? [])]);
+    const held = new Set([...[...this.notes, ...(this.pendingNotes ?? [])].flatMap((n) => n.files), ...this.files, ...(this.stash?.files ?? [])]);
     for (const f of unique(gone.flatMap((g) => g.note.files))) if (owned(f, filesDir()) && !held.has(f)) removeFile(f);
   }
 
@@ -294,7 +299,7 @@ export default class Queue extends View {
   }
 
   send(note, target, cx) {
-    if (!target || this.sending) return;
+    if (!target || this.sending || this.saving || this.loading || !this.ready) return;
     this.failed.delete(note.id);
     if (this.demo) {
       this.cur = `restore-${note.id}`;
@@ -333,6 +338,7 @@ export default class Queue extends View {
   // elsewhere: the surface the control sits on. `this.group` names the block the control is in (one
   // note, the field...), which is what J and K jump between.
   action(el, id, act, t, { label, role = "button", edge = t.raised, off = false } = {}) {
+    off ||= Boolean(this.saving || this.loading || this.submitting || this.sending);
     this.actions.push(off ? () => {} : act); this.ids.push(id); this.groups.push(this.group);
     const cursor = id === this.cur && this.handle.is_focused();
     return el.id(id).role(role).disabled(off).when(Boolean(label), (e) => e.accessibility_label(label))
@@ -577,11 +583,13 @@ export default class Queue extends View {
     if (this.rev === undefined) this.rev = shared(REV) ?? null;
     const count = waiting(this.notes).length;
     const flash = this.flash && Date.now() <= this.flash.until ? this.flash : null;
-    const status = flash?.text ?? (this.sending ? "Sending…" : count ? `${count} waiting` : "");
+    const status = flash?.text ?? (this.saving ? "Saving…" : this.sending ? "Sending…" : count ? `${count} waiting` : "");
     const tone = { ok: ink.ok, warn: ink.warn, fail: ink.fail }[flash?.tone] ?? ink.header;
     this.group = "top";
     const body = v_flex().id("queue-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(10)
-      .when(Boolean(this.error), (e) => e.child(div().px(2).role("alert").text_size(11).text_color(ink.fail).whitespace_normal().child(this.error)))
+      .when(Boolean(this.error), (e) => e
+        .child(div().px(2).role("alert").text_size(11).text_color(ink.fail).whitespace_normal().child(this.error))
+        .child(this.button("Retry", "queue-retry", (cx) => this.reload(cx), t, ink)))
       // A change that is not on disk stays written here until you dismiss it or the next save works.
       .when(Boolean(this.unsaved), (e) => e.child(h_flex().pl(2).gap(6).items_start()
         .child(div().flex_1().min_w(0).pt(4).role("alert").text_size(11).text_color(ink.warn).whitespace_normal().child(this.unsaved))
