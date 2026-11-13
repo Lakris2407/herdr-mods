@@ -1,5 +1,5 @@
 // One read of the runners: slots and their jobs from GitHub (`gh api`), load over ssh.
-// Finished runs are cached in `done` until they expire or become active again for a rerun.
+// Finished runs are cached in `done` until they expire or a rerun changes them (active again, or a new end time).
 import { exec } from "herdr";
 
 const HOUR = 3600000, KEEP = 2 * HOUR;
@@ -47,7 +47,13 @@ async function repoJobs(repo, done, now, isWatched) {
     if (ACTIVE.has(r.status)) active.push(r);
     else if (now - time(r.updated) < KEEP) fresh.push(r);
   }
-  const todo = [...active, ...fresh.filter((r) => !done[r.id]).slice(0, BACKFILL)];
+  // A rerun that started and ended between two reads never shows as active: its new end time gives it away.
+  const unread = (r) => !done[r.id] || done[r.id].at !== time(r.updated);
+  // Refresh known changed results before backfilling unseen runs: a busy repo can otherwise
+  // fill the budget with new runs on every poll and keep an old rerun outcome until expiry.
+  const changed = fresh.filter((r) => done[r.id] && unread(r));
+  const unseen = fresh.filter((r) => !done[r.id]);
+  const todo = [...active, ...[...changed, ...unseen].slice(0, BACKFILL)];
   const read = await Promise.all(todo.map(async (r) => [r, await api(`repos/${repo.repo}/actions/runs/${r.id}/jobs?per_page=100`, JOB_JQ)]));
   const jobs = [], newDone = {};
   // Finished runs read before still count, until they leave the two-hour window. A busy repo pushes
