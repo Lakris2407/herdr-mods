@@ -21,6 +21,20 @@ export async function save(notes, expected) {
 
 export const removeFile = (path) => fs.unlink(path).catch(() => {});
 
+// image() reads only below the app home, so a dropped image from elsewhere is copied into
+// queue-files/view/ to be shown large. One copy at a time: the next one removes the last.
+// Returns the path image() takes; the note keeps the original path.
+export async function viewCopy(src, id) {
+  const ext = src.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? "png", name = `${id}.${ext}`;
+  // A shell copy, as files-plus does: the mod's file calls reach only below the app home.
+  const r = await exec("sh", ["-c", 'mkdir -p "$1" && rm -f "$1"/* && cp "$2" "$1/$3"', "queue", `${filesDir()}/view`, src, name]);
+  if (r.code !== 0) throw new Error(r.stderr.trim() || "the image could not be copied");
+  return `queue-files/view/${name}`;
+}
+
+// A file that is not an image opens in the app the system picks. macOS only.
+export const openFile = (path) => exec("open", [path]);
+
 const script = (lines, args) => exec("osascript", [...lines.flatMap((l) => ["-e", l]), ...args]);
 
 // The clipboard's image as a PNG in queue-files/, or the file a file manager copied, as its own path.
