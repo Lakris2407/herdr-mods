@@ -492,7 +492,7 @@ export default class Queue extends View {
   noteText(n, t, ink) {
     const open = this.expanded.has(n.id), p = open ? { text: n.text, cut: true } : preview(n.text);
     const lines = p.text.split("\n");
-    const body = v_flex().min_w(0).gap(1).text_size(13).text_color(n.doneAt ? ink.hint : t.foreground)
+    const body = v_flex().min_w(0).gap(1).text_size(13).text_color(n.doneAt ? ink.hint : t.foreground).when(Boolean(n.doneAt), (e) => e.line_through())
       .children(lines.map((line) => (line.trim() ? div().min_w(0).whitespace_normal().child(line) : div().h(6))));
     if (!p.cut) return body.id(`text-${n.id}`);
     // The 2px cursor border sits in the card's padding, so a long note's text lines up with a short one's.
@@ -500,9 +500,24 @@ export default class Queue extends View {
       { label: open ? "Show less of the note" : "Show the whole note" }).tooltip(open ? "Show less" : "Show the whole note");
   }
 
+  // The circle at a note's left: a ring while the note waits, filled with a check when it is done.
+  // A click moves the note between the two lists, so it takes the place of a Done and a Restore button.
+  check(n, done, now, t, ink) {
+    const mark = done
+      ? div().size(15).rounded(8).flex().items_center().justify_center().bg(t.accent)
+        .child(svg("mods/workspace-chrome/check.svg").size(10).text_color(readable(t.raised, t.accent, 3)))
+      : div().size(15).rounded(8).border(1.5).border_color(ink.sub);
+    return this.action(div().size(23).mt(-3).ml(-4).flex().flex_none().items_center().justify_center().rounded(12).child(mark),
+      done ? `restore-${n.id}` : `done-${n.id}`,
+      (cx) => { this.cur = done ? `done-${n.id}` : `restore-${n.id}`; this.commit(cx, (notes) => setDone(notes, n.id, !done, now)); }, t,
+      { role: "check_box", label: done ? "Done. Put the note back in the queue" : "Mark the note done" })
+      .tooltip(done ? "Put back in the queue" : "Mark done");
+  }
+
   note(n, target, t, ink) {
     this.group = n.id;
     const now = Date.now(), done = Boolean(n.doneAt), busy = this.sending === n.id;
+    const check = this.check(n, done, now, t, ink);
     const where = target ? targetName(target) : null, fail = done ? null : this.failed.get(n.id);
     const text = n.text ? this.noteText(n, t, ink) : null;
     const files = n.files.length ? this.fileRow(n.files, `file-${n.id}`, t, ink) : null;
@@ -512,8 +527,6 @@ export default class Queue extends View {
       : null;
     const actions = done
       ? [
-        this.button("Restore", `restore-${n.id}`, (cx) => { this.cur = `done-${n.id}`; this.commit(cx, (notes) => setDone(notes, n.id, false, now)); }, t, ink,
-          { label: "Put the note back in the queue" }),
         this.button("Delete", `delete-${n.id}`, (cx) => this.deleteNotes([n.id], cx), t, ink,
           { label: "Delete the note", tip: n.files.length ? "Deletes the note and its pasted images. Undo shows for a few seconds." : "Undo shows for a few seconds" }),
       ]
@@ -523,16 +536,17 @@ export default class Queue extends View {
             tip: where ? `Paste into ${where} and press Enter` : "Choose an agent first, in the line under the field" }),
         this.button("Copy", `copy-${n.id}`, (cx) => this.copy(n, cx), t, ink, { label: "Copy the note", tip: "Copy the text and the files' paths, and mark the note done" }),
         this.button("Edit", `edit-${n.id}`, () => this.startEdit(n), t, ink, { label: "Edit the note" }),
-        this.button("Done", `done-${n.id}`, (cx) => { this.cur = `restore-${n.id}`; this.commit(cx, (notes) => setDone(notes, n.id, true, now)); }, t, ink, { label: "Mark the note done" }),
       ];
-    return v_flex().id(`note-${n.id}`).role("list_item").gap(6).px(10).pt(10).pb(6).rounded(8).bg(t.raised)
+    return h_flex().id(`note-${n.id}`).role("list_item").items_start().gap(6).px(10).pt(10).pb(6).rounded(8).bg(t.raised)
       .when(this.editing === n.id, (e) => e.border_1().border_color(ink.ring))
-      .when(Boolean(text), (e) => e.child(text))
-      .when(Boolean(files), (e) => e.child(files))
-      .when(Boolean(failure), (e) => e.child(failure))
-      .child(h_flex().flex_wrap().mx(-6).items_center()
-        .child(div().flex_1().min_w(0).pl(6).truncate().text_size(11).text_color(ink.hint).child(done ? `Done ${ago(n.doneAt, now)}` : ago(n.createdAt, now)))
-        .children(actions));
+      .child(check)
+      .child(v_flex().flex_1().min_w(0).gap(6)
+        .when(Boolean(text), (e) => e.child(text))
+        .when(Boolean(files), (e) => e.child(files))
+        .when(Boolean(failure), (e) => e.child(failure))
+        .child(h_flex().flex_wrap().mx(-6).items_center()
+          .child(div().flex_1().min_w(0).pl(6).truncate().text_size(11).text_color(ink.hint).child(done ? `Done ${ago(n.doneAt, now)}` : ago(n.createdAt, now)))
+          .children(actions)));
   }
 
   searchField(t, ink) {

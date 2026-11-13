@@ -36,8 +36,9 @@ The screenshot uses made-up notes.
 - **Edit** moves the note back into the field; **Save** or **Cancel** ends the edit. A draft you
   had in the field is set aside and comes back after. If another window deleted the original while
   you edited it, Save keeps your edit as a new note.
-- **Done** notes move to a list at the bottom. **Restore** puts one back in the queue, **Delete**
-  removes it, and **Clear done** removes all of them (under a search: the ones the search shows).
+- **The circle** at a note's left marks it done: the note moves to a list at the bottom, with a
+  check in the circle and its text struck through. A click on the check puts the note back in the
+  queue. **Delete** removes a done note, and **Clear done** removes all of them (under a search: the ones the search shows).
   Only a done note can be deleted, and **Undo** shows for about ten seconds after a delete, so one
   wrong click never loses a note. Deleting a note deletes its pasted images too, once Undo is gone;
   files you dropped are never touched.

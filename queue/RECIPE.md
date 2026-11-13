@@ -39,8 +39,9 @@ presses Enter.
   high. Send is dim with no agent, and reads "Sending…" while it runs. A failed send writes why on
   the card in the fail color, wrapping, with **Dismiss**, and Send reads **Send again**.
 - **Done:** a heading "Done · 2" with **Clear done** at the right ("Clear shown" under a search),
-  then the done notes, last done first, their text in the hint color, with "Done 42m ago",
-  **Restore** and **Delete**. After a delete, "Deleted 2 notes" and **Undo** show above the heading.
+  then the done notes, last done first, each with a filled check circle at its left (a ring on a waiting
+  note; a click moves the note between the lists), its text struck through in the hint color,
+  "Done 42m ago" and **Delete**. After a delete, "Deleted 2 notes" and **Undo** show above the heading.
 - **Empty states:** "No notes yet. Write a prompt now, and send it when an agent is free. Send
   pastes the note into the agent and presses Enter.", "The queue is empty. The notes below are
   done.", "No note matches the search."
@@ -87,7 +88,7 @@ presses Enter.
   toward the terminals, and Escape in a text field gives the keyboard back to the panel.
   `queue.new` (`herdr-app do queue.new`) focuses the field. The ring is kept as the id of its
   control, and an action that moves its own button puts the ring on the one that takes it back
-  (Send, Copy and Done on Restore, Restore on Done, Delete on Undo).
+  (Send, Copy and the ring on the check, the check on the ring, Delete on Undo).
 - A three-second timer does the reload after another copy's save, clears the status after four
   seconds, ends Undo and keeps the ages true; it redraws only for those.
 
