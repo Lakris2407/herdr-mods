@@ -34,6 +34,9 @@ The screenshot uses made-up notes.
   from the list, then send. A pick holds while you stay in the panel. If the agent is in a tab you
   do not see, the line says which tab.
 - **Copy** puts the same text on the clipboard, for a chat outside Herdr, and marks the note done.
+- **Pin** keeps a prompt you use often, such as "review the diff" or "run the tests and open a PR".
+  A pinned prompt sits on top, shows in every space, and Send and Copy leave it in place instead
+  of marking it done. Click the pin at its left to unpin it: it goes back in the queue.
 - **Edit** moves the note back into the field; **Save** or **Cancel** ends the edit. A draft you
   had in the field is set aside and comes back after. If another window deleted the original while
   you edited it, Save keeps your edit as a new note.

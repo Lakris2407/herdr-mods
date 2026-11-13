@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   parse, serialize, makeNote, add, edit, setDone, remove, clearDone, waiting, finished, filter, inSpace, dropped, owned,
   fileName, isImage, promptText, preview, ago, pickTarget, targetName, targetTitle, sendError,
-  taken, removeMany, putBack, statusWord, targetPlace,
+  taken, removeMany, putBack, statusWord, targetPlace, setPinned, pinnedNotes,
 } from "../mods/queue/notes.js";
 import { demoNotes } from "../mods/queue/demo.js";
 
@@ -151,6 +151,24 @@ test("a failed send says what to do", () => {
 
 test("the demo has waiting and done notes, and every one parses", () => {
   const notes = demoNotes(1e12);
-  assert.ok(waiting(notes).length >= 3 && finished(notes).length >= 1);
+  assert.ok(waiting(notes).length >= 3 && finished(notes).length >= 1 && pinnedNotes(notes).length >= 1);
   assert.deepEqual(parse(serialize(notes)), notes);
+});
+
+test("a pinned prompt is never waiting or done, shows in every space, and unpins back into the queue", () => {
+  const here = makeNote("h", "here", [], 1, { id: "sp1", name: "shop" });
+  const there = { ...makeNote("t", "review the diff", [], 2, { id: "sp2", name: "blog" }), doneAt: 5 };
+  let notes = setPinned([here, there], "t", true);
+  assert.deepEqual(pinnedNotes(notes).map((n) => n.id), ["t"]);
+  assert.equal(notes[1].doneAt, null);
+  assert.deepEqual(waiting(notes).map((n) => n.id), ["h"]);
+  assert.deepEqual(finished(notes), []);
+  assert.deepEqual(inSpace(notes, "sp1").map((n) => n.id), ["h", "t"]);
+  assert.deepEqual(parse(serialize(notes)), notes);
+  // An edit keeps the pin.
+  assert.equal(edit(notes, "t", "new", [])[1].pinned, true);
+  notes = setPinned(notes, "t", false);
+  assert.equal("pinned" in notes[1], false);
+  assert.deepEqual(waiting(notes).map((n) => n.id), ["h", "t"]);
+  assert.deepEqual(inSpace(notes, "sp1").map((n) => n.id), ["h"]);
 });
