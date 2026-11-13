@@ -6,7 +6,7 @@ import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
 import { theme, run, hc, shared, setShared, nextCommand, agents, spaces, focused, window, openOverlay, closeOverlay, props as blockProps } from "herdr";
 import { randomUUID } from "crypto";
-import { load, save, removeFile, clipboardFile, filesDir } from "./store.js";
+import { load, save, removeFile, clipboardFile, filesDir, viewCopy, openFile } from "./store.js";
 import { demoNotes, demoAgent } from "./demo.js";
 import {
   makeNote, add, edit, setDone, taken, removeMany, putBack, waiting, finished, filter, inSpace, dropped, owned, unique,
@@ -266,12 +266,25 @@ export default class Queue extends View {
     });
   }
 
-  // A pasted image, large, over the window: Esc, a click on it or beside it closes it.
+  // An image, large, over the window: Esc, a click on it or beside it closes it. A dropped image
+  // from outside queue-files/ is copied in first, because image() reads only below the app home.
   preview(path, cx) {
     cx.spawn(async () => {
-      const size = await imageSize(path);
-      openOverlay({ mod: "queue", kind: "dialog", width: 0.9, height: 0.9, props: { viewer: { picture: `queue-files/${fileName(path)}`, size } } });
+      try {
+        const [picture, size] = await Promise.all([
+          owned(path, filesDir()) ? `queue-files/${fileName(path)}` : viewCopy(path, randomUUID()), imageSize(path)]);
+        openOverlay({ mod: "queue", kind: "dialog", width: 0.9, height: 0.9, props: { viewer: { picture, size } } });
+      } catch (e) {
+        this.say(`Could not show ${fileName(path)}: ${e.message ?? e}`, "warn"); cx.notify();
+      }
     });
+  }
+
+  // A chip's click: an image shows large; another file opens in its app (macOS only).
+  show(path, cx) {
+    if (isImage(path)) return this.preview(path, cx);
+    openFile(path).then((r) => { if (r?.code) { this.say(`Could not open ${fileName(path)}`, "warn"); cx.notify(); } },
+      (e) => { this.say(`Could not open ${fileName(path)}: ${e.message ?? e}`, "warn"); cx.notify(); });
   }
 
   viewerView(t) {
@@ -389,19 +402,25 @@ export default class Queue extends View {
     return this.action(el, id, act, t, { label, off, edge }).when(Boolean(tip), (e) => e.tooltip(tip)).child(text);
   }
 
-  // A note's files: a pasted image as a thumbnail, any other file as its name. `onRemove` adds the ×
-  // the composer needs.
+  // A note's files: a pasted image as a thumbnail, any other file as its name. A click on either
+  // shows it (see show()). `onRemove` adds the × the composer needs.
   fileRow(files, key, t, ink, onRemove = null) {
     const x = (i) => this.action(div().w(22).h(24).flex().flex_none().items_center().justify_center().rounded(4).text_color(ink.label),
       `${key}-x-${i}`, (cx) => onRemove(i, cx), t, { label: `Remove ${fileName(files[i])}`, edge: t.background }).child("×");
     const dir = filesDir();
+    const opens = window()?.platform === "macos";
     return h_flex().flex_wrap().gap(4).items_center().children(files.map((path, i) => {
-      const thumb = !this.demo && isImage(path) && owned(path, dir);
-      return h_flex().id(`${key}-${i}`).min_w(0).max_w("100%").h(thumb ? 48 : 24).pl(thumb ? 0 : 6).pr(onRemove ? 0 : 6).gap(4).items_center()
-        .rounded(5).overflow_hidden().bg(t.background).text_size(11).text_color(ink.label).tooltip(thumb ? "Click to see it large" : path)
-        .when(thumb, (e) => e.child(this.action(div().flex_none().rounded(5), `${key}-img-${i}`, (cx) => this.preview(path, cx), t,
+      const thumb = !this.demo && isImage(path) && owned(path, dir), clicks = !this.demo && (isImage(path) || opens);
+      const what = isImage(path) ? "see it large" : "open it";
+      return h_flex().id(`${key}-${i}`).min_w(0).max_w("100%").h(thumb ? 48 : 24).pr(onRemove ? 0 : 2).gap(4).items_center()
+        .rounded(5).overflow_hidden().bg(t.background).text_size(11).text_color(ink.label)
+        .tooltip(thumb ? "Click to see it large" : clicks ? `${path}\nClick to ${what}` : path)
+        .when(thumb, (e) => e.child(this.action(div().flex_none().rounded(5), `${key}-img-${i}`, (cx) => this.show(path, cx), t,
           { label: `Show ${fileName(path)} large`, edge: t.background }).child(image(`queue-files/${fileName(path)}`).h(44))))
-        .when(!thumb, (e) => e.child(div().min_w(0).truncate().child(fileName(path))))
+        .when(!thumb && clicks, (e) => e.child(this.action(div().min_w(0).h(24).px(4).flex().items_center().rounded(5), `${key}-name-${i}`,
+          (cx) => this.show(path, cx), t, { label: isImage(path) ? `Show ${fileName(path)} large` : `Open ${fileName(path)}`, edge: t.background })
+          .child(div().min_w(0).truncate().child(fileName(path)))))
+        .when(!thumb && !clicks, (e) => e.child(div().min_w(0).pl(6).pr(4).truncate().child(fileName(path))))
         .when(Boolean(onRemove), (e) => e.child(x(i)));
     }));
   }

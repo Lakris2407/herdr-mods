@@ -17,8 +17,9 @@ The screenshot uses made-up notes.
 - **Attach.** Drop files anywhere on the panel, or paste in the field: a screenshot on the clipboard
   becomes an image under the note, and a file copied in Finder is attached as itself. A dropped
   file is not copied: the note keeps its path. A pasted image is saved in
-  `~/.config/herdr-app/queue-files/` and shows as a thumbnail. Click the thumbnail to see
-  the image large over the window; Escape or a click closes it. Pasting needs macOS (it reads the
+  `~/.config/herdr-app/queue-files/` and shows as a thumbnail. Click the thumbnail, or the name
+  of a dropped image, to see the image large over the window; Escape or a click closes it.
+  Click any other file's name to open it in its app (macOS). Pasting needs macOS (it reads the
   clipboard with `osascript`); dropping works everywhere.
 - **Send.** Pastes the note into an agent's terminal and presses Enter, then marks the note done.
   The agent gets the text, then each file's path on its own line, so it can open a screenshot itself.

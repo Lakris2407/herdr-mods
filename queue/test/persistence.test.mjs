@@ -18,7 +18,7 @@ const host = `data:text/javascript,${encodeURIComponent(`
   export const load = (...a) => globalThis.${runtime}.load(...a);
   export const save = (...a) => globalThis.${runtime}.save(...a);
   export const removeFile = (...a) => globalThis.${runtime}.removeFile(...a);
-  export const clipboardFile = null, filesDir = () => "/queue-files";
+  export const clipboardFile = null, viewCopy = null, openFile = null, filesDir = () => "/queue-files";
 `)}`;
 const main = new URL("../mods/queue/main.js", import.meta.url);
 const source = (await readFile(main, "utf8")).replace(/from "([^"]+)"/g, (all, name) => {
