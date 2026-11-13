@@ -171,6 +171,13 @@
                       "content": {
                         "mod": "runners"
                       }
+                    },
+                    {
+                      "id": "queue",
+                      "type": "block",
+                      "content": {
+                        "mod": "queue"
+                      }
                     }
                   ],
                   "active": "files"

@@ -9,7 +9,8 @@ machines beside them. [RECIPE.md](RECIPE.md) says what you see and how to build 
   and run time; right-click one to stop it).
 - **Status bar:** the space and branch, CI, [Runners](../runners/), CPU, RAM and GPU load, [agent
   quota](../quota/), and the [Controls](../controls/) menu.
-- **Side panel:** Files (with image previews), Changes, GitHub, [Your stats](../stats/) and Runners.
+- **Side panel:** Files (with image previews), Changes, GitHub, [Your stats](../stats/), Runners and the
+  [Queue](../queue/) of prompts to send later.
 - **Right-click a terminal** to open the files and folders on screen ([Path menu](../path-menu/)).
 
 ## Install
@@ -29,7 +30,7 @@ first, or remove the `github` and `status-ci` nodes from `layouts/fleet.json`.
 ## What it runs
 
 `gh` (stats, runners, quota), `ssh` to the build machines you list in `runners.json` (runners),
-`quota-axi` (quota), and Herdr's own commands. Each mod's README has the details. Nothing runs that the
+`quota-axi` (quota), `osascript` for a pasted screenshot (queue), and Herdr's own commands. Each mod's README has the details. Nothing runs that the
 mods' READMEs don't list.
 
 ## Work on it

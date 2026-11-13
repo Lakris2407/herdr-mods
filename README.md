@@ -8,6 +8,7 @@ where several coding agents work at once, with self-hosted build machines beside
 | [Agent quota](quota/) | Claude, Codex and other agents' usage limits in the status bar, plus live CPU, RAM and GPU load (`system`). |
 | [Runners](runners/) | What waits for your self-hosted runners and build machines, what runs on them and each machine's load: a status-bar chip, a side panel and a timeline. |
 | [Your stats](stats/) | Your own delivery numbers in a side panel: PRs merged, time to merge, AI share (Claude vs Codex), per-repo breakdown. |
+| [Queue](queue/) | Notes and prompts that wait in a side panel, with files and screenshots: one click sends one to an agent. |
 | [Path menu](path-menu/) | Right-click a terminal to open the files and folders on screen. |
 | [Agents list](agents/) | Herdr's Agents sidebar, changed: sub-agents show their task and how long they have run, the task comes first, and quiet text reads. |
 | [Controls](controls/) | One menu to turn any status-bar block, tab-bar button and side-panel button off and on. |
@@ -18,7 +19,7 @@ where several coding agents work at once, with self-hosted build machines beside
 ## Install
 
 Ask the agent running in Herdr: "add the Herdr mod at github.com/Lakris2407/herdr-mods/tree/main/runners"
-(or `quota`, `stats`, `path-menu`, `controls`, `agents`). Herdr's guide tells it to read every file first and to
+(or `quota`, `stats`, `queue`, `path-menu`, `controls`, `agents`). Herdr's guide tells it to read every file first and to
 say what the mod runs.
 
 By hand: clone this repo, do the [one-time setup](#one-time-setup), then copy the mods you want and

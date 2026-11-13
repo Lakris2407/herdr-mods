@@ -13,7 +13,7 @@ Fleet is a Herdr window for watching several coding agents and the build machine
 - Timestamp-only space names become the repository name, with a time such as “18:39” to distinguish worktrees; older dates include day and month. The original name remains in a tooltip. Ordinary spaces keep their names. Routine main/master branches and repeated repository names disappear from the hint.
 - Agents has a 41px heading with a sort button. Groups have 30px headings; parent rows are 30px, sub-agent rows 26px. The task gets the free width, followed by a short space hint, optional remote machine, elapsed time and status. Child rows have tree lines and 12.5px task text.
 - A 42px tab strip spans the work area. Tabs are 29px high, rounded 7px, with 12.8px text and names capped at 170px. The active tab has a raised fill, border and close button. The new-tab plus follows the last tab inside the scrolling strip; a 1px divider separates the panel buttons.
-- The panel buttons read Files, Changes, GitHub, Stats and Runners, in that order. They are 26px high with 14px icons and 12px labels.
+- The panel buttons read Files, Changes, GitHub, Stats, Runners and Queue, in that order. They are 26px high with 14px icons and 12px labels.
 - The terminal area has 8px outside padding and 8px gaps. Panes have a 10px corner radius, 1px border and 1px accent focus edge. Even a lone pane keeps its frame and always-visible 30px top header. Terminal padding is 14px vertically and 12px horizontally.
 - Pane headers use 12px text: program icon and name, a short folder name, then status. Hover reveals split-right, split-down, zoom and close icons. Full folders remain in tooltips; generated folder names borrow their space label.
 - The right panel starts hidden. When open it is 368px wide, with bounds of 280–900px. Its stack starts on Files and shows one child at a time. Files, Stats and Runners use a 42px heading, 10px panel radius and 1px border.
@@ -87,7 +87,8 @@ root: row, background canvas
    │        ├─ changes: block changes
    │        ├─ github: block github (separate add-on)
    │        ├─ stats: block stats
-   │        └─ runners: block runners
+   │        ├─ runners: block runners
+   │        └─ queue: block queue
    └─ status: row, 28px, resizable false
       ├─ status-main: workspace-status-plus, weight 1.9, min 160
       ├─ status-ci: github, {view:"ci"}, weight 0.8, min 50
@@ -111,6 +112,7 @@ Bundle these 13 mod folders, each with `main.js`, `mod.json` and its supporting 
 | pane-plus | One header per pane; host-supplied `pane` and `terminal` identify it. Reads pane program, folder and status. |
 | path-menu | `main.js` handles menu items; `paths.js` finds existing visible paths. Props `tab`, `target`, optional `paths` and host overlay ID carry menu context. |
 | quota | `quota-command.js` starts quota reads and Copilot fallback; `quota-windows.js` filters Antigravity Claude/GPT windows. Props seed `hidden`, `kinds`, `signedOut`, `names`, `remaining`, `agyClaudeGpt`; saved choices win. Internal `menu`, `machine`, `start` draw a pinned-machine popup. |
+| queue | `notes.js` holds the note logic, `store.js` reads and writes `queue.json` and pasted images, `demo.js` supplies fixtures; `demo:true` uses those and reads, saves and sends nothing. |
 | runners | `view` selects default panel, `chip`, `popup` or `lanes`. `config`, `load`, `lanesource`, `poll`, `model`, `keys`, `ui` and the four view modules separate sources, shared polling, calculations and drawing; `demo.js` supplies fixtures. |
 | spaces-plus | Space/machine list, Git discovery, worktree grouping, reconnect and shared labels. No layout props. |
 | stats | `load.js` reads GitHub, `stats.js` computes figures and `demo.js` supplies fixtures; `demo:true` uses those without loading GitHub or writing the stats cache. |
@@ -132,7 +134,7 @@ Herdr API and command wiring:
 - Space actions run `space.new`, `space.select`, `space.move`; tab actions run `tab.select`, `tab.rename`, `tab.move`, `tab.close`, `tab.prev`, `tab.next`. The path-menu implementation also contains `tab.new`, `space.rename`, `space.close`, `app.help`, `app.theme` and `worktree` dialog actions for its other menu contexts.
 - Pane actions run `pane.focus`, `pane.split`, `pane.zoom`, `pane.close`, `pane.go`. Child actions run `terminal.peek`, `terminal.keep`, `terminal.pin`, `terminal.kill`, and the path menu also runs `terminal.park` / `terminal.right_click`. Confirmation passes `terminal.kill` as a command to `confirm` before stopping a non-idle child.
 - Chrome uses `app.settings`, `app.palette`, `mod.open` for `picker`, `machine-add` and `controls`, `layout.resize`, `layout.hide`, `layout.show`, `layout.select`, and `window.minimize`, `window.maximize`, `window.close`.
-- Mod commands are `stats.refresh`, `runners.refresh`, `runners.timeline`, `runners.panel`, and `quota:menu` / `quota:refresh`. Fleet ships no `keys.json`; these are actions to bind if wanted, not newly installed shortcuts.
+- Mod commands are `stats.refresh`, `runners.refresh`, `runners.timeline`, `runners.panel`, `queue.new`, and `quota:menu` / `quota:refresh`. Fleet ships no `keys.json`; these are actions to bind if wanted, not newly installed shortcuts.
 
 Programs, reads and network use:
 
