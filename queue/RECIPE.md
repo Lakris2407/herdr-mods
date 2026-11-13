@@ -78,6 +78,11 @@ presses Enter.
   draws only the image, fitted to the dialog (`sips` reads the pixel size on macOS), and a click
   or Escape closes it.
 - Copy writes the same text to the clipboard and marks the note done.
+- **Pin** (after Edit on a waiting note) makes the note a prompt you use often: `pinned: true` in the
+  file. Pinned notes list first, under "Pinned · N" (the waiting notes then get a "Waiting · N"
+  heading), show in every space, and are never done: Send and Copy leave them in place, and the
+  header count leaves them out. The circle's place holds a pin icon in the ring color; its click
+  unpins the note, which goes back into the queue as a waiting note.
 - Only done notes can be deleted. Delete and Clear done keep the notes for eight seconds (the timer
   ends it, so up to three more): Undo puts each one back at its old place. Under a search, Clear
   deletes only the done notes the search shows.

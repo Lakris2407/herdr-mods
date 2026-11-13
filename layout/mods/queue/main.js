@@ -1,6 +1,7 @@
 // A queue of notes and prompts in a side panel: write one now, send it to an agent when the agent is
 // free. A note can carry files and pasted screenshots; Send pastes the text and the files' paths into
-// the agent's terminal and presses Enter, Copy puts the same text on the clipboard.
+// the agent's terminal and presses Enter, Copy puts the same text on the clipboard. A pinned note is a
+// prompt you use often: it stays on top, in every space, and Send and Copy never mark it done.
 // The notes live in ~/.config/herdr-app/queue.json (store.js); notes.js holds the logic and has no Herdr imports.
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex, TextareaState, Textarea, InputState, Input } from "gpui-base";
@@ -9,7 +10,7 @@ import { randomUUID } from "crypto";
 import { load, save, removeFile, clipboardFile, filesDir, viewCopy, openFile } from "./store.js";
 import { demoNotes, demoAgent } from "./demo.js";
 import {
-  makeNote, add, edit, setDone, taken, removeMany, putBack, waiting, finished, filter, inSpace, dropped, owned, unique,
+  makeNote, add, edit, setDone, setPinned, pinnedNotes, taken, removeMany, putBack, waiting, finished, filter, inSpace, dropped, owned, unique,
   fileName, isImage, promptText, preview, ago, plural, pickTarget, targetName, targetTitle, targetPlace, statusWord, sendError,
 } from "./notes.js";
 import { readable, roles } from "./colors.js";
@@ -316,8 +317,7 @@ export default class Queue extends View {
     if (!target || this.sending || this.saving || this.loading || !this.ready) return;
     this.failed.delete(note.id);
     if (this.demo) {
-      this.cur = `restore-${note.id}`;
-      this.commit(cx, (notes) => setDone(notes, note.id, true, Date.now()));
+      if (!note.pinned) { this.cur = `restore-${note.id}`; this.commit(cx, (notes) => setDone(notes, note.id, true, Date.now())); }
       this.say(`Sent to ${target.program.name}`, "ok");
       return;
     }
@@ -329,9 +329,12 @@ export default class Queue extends View {
       this.sending = null;
       if (r.code === 0) {
         this.say(`Sent to ${targetName(target)}`, "ok");
-        // The cursor goes to this note's Restore, not to the next note's Send: a second Enter never sends twice.
-        if (this.cur === `send-${note.id}`) this.cur = `restore-${note.id}`;
-        this.commit(cx, (notes) => setDone(notes, note.id, true, Date.now()));
+        // A pinned prompt stays where it is. Any other note is done: the cursor goes to its Restore, not
+        // to the next note's Send, so a second Enter never sends twice.
+        if (!note.pinned) {
+          if (this.cur === `send-${note.id}`) this.cur = `restore-${note.id}`;
+          this.commit(cx, (notes) => setDone(notes, note.id, true, Date.now()));
+        }
       } else {
         this.failed.set(note.id, sendError(r));
         this.say("Not sent", "fail");
@@ -343,8 +346,9 @@ export default class Queue extends View {
   copy(note, cx) {
     cx.write_to_clipboard(promptText(note));
     const what = note.files.length ? `Copied with ${plural(note.files.length, "file path")}` : "Copied";
-    this.say(note.doneAt ? what : `${what}, and marked done`, "ok");
-    if (!note.doneAt) { this.cur = `restore-${note.id}`; this.commit(cx, (notes) => setDone(notes, note.id, true, Date.now())); }
+    const stays = note.doneAt || note.pinned;
+    this.say(stays ? what : `${what}, and marked done`, "ok");
+    if (!stays) { this.cur = `restore-${note.id}`; this.commit(cx, (notes) => setDone(notes, note.id, true, Date.now())); }
   }
 
   // Everything you can act on registers here while the panel renders, in reading order, so the
@@ -523,6 +527,12 @@ export default class Queue extends View {
   // The circle at a note's left: a ring while the note waits, filled with a check when it is done.
   // A click moves the note between the two lists, so it takes the place of a Done and a Restore button.
   check(n, done, now, t, ink) {
+    if (n.pinned) {
+      return this.action(div().size(23).mt(-3).ml(-4).flex().flex_none().items_center().justify_center().rounded(12)
+        .child(svg("mods/workspace-chrome/pin.svg").size(14).text_color(ink.ring)),
+      `unpin-${n.id}`, (cx) => { this.cur = `pin-${n.id}`; this.commit(cx, (notes) => setPinned(notes, n.id, false)); }, t,
+      { label: "Pinned prompt. Unpin it: it goes back in the queue" }).tooltip("Unpin: back in the queue");
+    }
     const mark = done
       ? div().size(15).rounded(8).flex().items_center().justify_center().bg(t.accent)
         .child(svg("mods/workspace-chrome/check.svg").size(10).text_color(readable(t.raised, t.accent, 3)))
@@ -556,8 +566,12 @@ export default class Queue extends View {
         this.button(busy ? "Sending…" : fail ? "Send again" : "Send", `send-${n.id}`, (cx) => this.send(n, target, cx), t, ink,
           { strong: Boolean(target), off: !target || Boolean(this.sending), label: where ? `Send the note to ${where}` : "Send: no agent chosen",
             tip: where ? `Paste into ${where} and press Enter` : "Choose an agent first, in the line under the field" }),
-        this.button("Copy", `copy-${n.id}`, (cx) => this.copy(n, cx), t, ink, { label: "Copy the note", tip: "Copy the text and the files' paths, and mark the note done" }),
-        this.button("Edit", `edit-${n.id}`, () => this.startEdit(n), t, ink, { label: "Edit the note" }),
+        this.button("Copy", `copy-${n.id}`, (cx) => this.copy(n, cx), t, ink, n.pinned
+          ? { label: "Copy the prompt", tip: "Copy the text and the files' paths. The prompt stays pinned." }
+          : { label: "Copy the note", tip: "Copy the text and the files' paths, and mark the note done" }),
+        this.button("Edit", `edit-${n.id}`, () => this.startEdit(n), t, ink, { label: n.pinned ? "Edit the prompt" : "Edit the note" }),
+        ...(n.pinned ? [] : [this.button("Pin", `pin-${n.id}`, (cx) => { this.cur = `unpin-${n.id}`; this.commit(cx, (notes) => setPinned(notes, n.id, true)); }, t, ink,
+          { label: "Pin the note as a prompt you use often", tip: "Keep it on top, in every space. Send and Copy leave a pinned prompt in place." })]),
       ];
     return h_flex().id(`note-${n.id}`).role("list_item").items_start().gap(6).px(10).pt(10).pb(6).rounded(8).bg(t.raised)
       .when(this.editing === n.id, (e) => e.border_1().border_color(ink.ring))
@@ -593,13 +607,15 @@ export default class Queue extends View {
   body(t, ink) {
     const target = this.target(), list = this.demo ? [demoAgent] : agents();
     const searching = Boolean(this.query.trim()), mine = this.mine();
-    const shown = filter(mine, this.query), open = waiting(shown), done = finished(shown);
-    const none = searching ? "No note matches the search."
-      : mine.length ? "The queue is empty. The notes below are done."
-        : "No notes yet. Write a prompt now, and send it when an agent is free. Send pastes the note into the agent and presses Enter.";
+    const shown = filter(mine, this.query), pins = pinnedNotes(shown), open = waiting(shown), done = finished(shown);
+    const none = searching ? (pins.length ? "" : "No note matches the search.")
+      : mine.length ? (pins.length && !done.length ? "" : `The queue is empty.${done.length ? " The notes below are done." : ""}`)
+        : "No notes yet. Write a prompt now, and send it when an agent is free. Send pastes the note into the agent and presses Enter. Pin a prompt you use often to keep it.";
     this.searchShown = mine.length >= SEARCH_FROM || Boolean(this.query);
     const composer = this.composer(t, ink), where = this.targetLine(target, list, t, ink);
     const search = this.searchShown ? this.searchField(t, ink) : null;
+    this.group = "pinned";
+    const pinList = v_flex().role("list").accessibility_label("Pinned prompts").gap(10).children(pins.map((n) => this.note(n, target, t, ink)));
     const waitingList = v_flex().role("list").accessibility_label("Waiting notes").gap(10).children(open.map((n) => this.note(n, target, t, ink)));
     this.group = "done";
     const gone = this.trash?.gone.length ?? 0;
@@ -617,7 +633,11 @@ export default class Queue extends View {
       .child(composer)
       .child(where)
       .when(Boolean(search), (e) => e.child(search))
-      .when(open.length === 0, (e) => e.child(div().px(2).py(4).text_size(12).text_color(ink.header).whitespace_normal().child(none)))
+      .when(pins.length > 0, (e) => e
+        .child(div().pl(2).text_size(11).font_semibold().text_color(ink.header).child(`Pinned · ${pins.length}`))
+        .child(pinList)
+        .when(open.length > 0, (e) => e.child(div().mt(4).pl(2).text_size(11).font_semibold().text_color(ink.header).child(`Waiting · ${open.length}`))))
+      .when(open.length === 0 && Boolean(none), (e) => e.child(div().px(2).py(4).text_size(12).text_color(ink.header).whitespace_normal().child(none)))
       .when(open.length > 0, (e) => e.child(waitingList))
       .when(Boolean(undo), (e) => e.child(undo))
       .when(done.length > 0, (e) => e

@@ -20,6 +20,7 @@ export function parse(text) {
     doneAt: Number(n.doneAt) || null,
     space: typeof n.space === "string" ? n.space : null,
     spaceName: typeof n.spaceName === "string" ? n.spaceName : null,
+    ...(n.pinned === true ? { pinned: true } : {}),
   }));
 }
 
@@ -30,8 +31,9 @@ export const serialize = (notes) => `${JSON.stringify({ version: VERSION, notes 
 export const makeNote = (id, text, files, now, space = null) =>
   ({ id, text: text.trim(), files: unique(files), createdAt: now, doneAt: null, space: space?.id ?? null, spaceName: space?.name ?? null });
 
-// The notes of one space. A note with no space (written before notes had one) shows in every space.
-export const inSpace = (notes, id) => (id ? notes.filter((n) => !n.space || n.space === id) : notes);
+// The notes of one space. A note with no space (written before notes had one) shows in every space,
+// and so does a pinned prompt: a prompt you use often is not tied to one project.
+export const inSpace = (notes, id) => (id ? notes.filter((n) => !n.space || n.space === id || n.pinned) : notes);
 
 export const unique = (list) => [...new Set(list)];
 
@@ -43,6 +45,18 @@ export const edit = (notes, id, text, files) =>
 
 export const setDone = (notes, id, done, now) =>
   notes.map((n) => (n.id === id ? { ...n, doneAt: done ? now : null } : n));
+
+// A pinned note is a prompt you use again and again: it is never done, so Send and Copy leave it in
+// place. Unpinning puts it back in the queue as a waiting note.
+export function setPinned(notes, id, pin) {
+  return notes.map((n) => {
+    if (n.id !== id) return n;
+    const { pinned, ...rest } = n;
+    return pin ? { ...rest, doneAt: null, pinned: true } : rest;
+  });
+}
+
+export const pinnedNotes = (notes) => notes.filter((n) => n.pinned);
 
 export const remove = (notes, id) => notes.filter((n) => n.id !== id);
 
@@ -62,7 +76,7 @@ export function putBack(notes, gone) {
   return out;
 }
 
-export const waiting = (notes) => notes.filter((n) => !n.doneAt);
+export const waiting = (notes) => notes.filter((n) => !n.doneAt && !n.pinned);
 
 // The note finished last comes first.
 export const finished = (notes) => notes.filter((n) => n.doneAt).sort((a, b) => b.doneAt - a.doneAt);
