@@ -81,10 +81,11 @@ export default class Tabs extends View {
       // agents list), else the program. A name someone typed stays.
       const live = (lead?.title ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
       const telling = live && live !== program?.name && !/^[~/]/.test(live) && !live.includes("@");
-      const name = /^tb\d+$/.test(c.name) || /^\d+$/.test(c.name) ? (telling ? live : program?.name ?? "Terminal") : c.name;
-      // herdr-mods: a name that only repeats the program ("Claude Code") says what the icon already
-      // says, so the tab is the icon alone and the name moves to the tooltip.
-      const bare = Boolean(program?.icon) && name === program.name;
+      const automatic = /^tb\d+$/.test(c.name) || /^\d+$/.test(c.name);
+      const name = automatic ? (telling ? live : program?.name ?? "Terminal") : c.name;
+      // herdr-mods: an automatic name that repeats the program ("Claude Code") says what the
+      // icon already says, so the tab is the icon alone and the name moves to the tooltip.
+      const bare = automatic && Boolean(program?.icon) && name === program.name;
       const label = bare ? (c.zoomed ? "Z" : "") : c.zoomed ? `${name} Z` : name;
       return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
         .border(1).border_color(c.active ? t.border : t.chrome).bg(c.active ? t.raised : t.chrome).text_color(c.active ? t.foreground : t.muted)
