@@ -318,3 +318,36 @@ test("a rerun that started and ended between two reads replaces the cached jobs"
   assert.deepEqual(rerun.jobs.map((j) => j.id), [71]);
   assert.equal(rerun.done[7].at, updated);
 });
+
+test("a completed rerun is refreshed before new runs fill the backfill budget", async () => {
+  const { loadJobs } = await import("../mods/runners/load.js");
+  const config = { repos: [{ repo: "acme/web", short: "WEB" }], labels: [], machines: [] };
+  const iso = (ms) => new Date(ms).toISOString();
+  const reads = [];
+  const updated = now - MIN;
+  // GitHub lists newer runs first; eight unseen runs precede the cached rerun.
+  const runs = [...Array.from({ length: 8 }, (_, i) => ({ id: 20 - i, updated: iso(updated) })),
+    { id: 7, updated: iso(updated) }];
+  state.exec = async (cmd, args) => {
+    const path = args[1];
+    if (path.endsWith("actions/runs?per_page=30")) return { code: 0, stdout: runs.map((r) => JSON.stringify({ ...r, workflow: "CI", status: "completed" })).join("\n"), stderr: "" };
+    if (path.includes("/jobs")) {
+      const id = Number(/runs\/(\d+)/.exec(path)[1]);
+      reads.push(id);
+      return { code: 0, stdout: JSON.stringify({ id: id === 7 ? 71 : id * 10, name: "e2e", status: "completed", conclusion: "success", labels: ["self-hosted"], started: iso(updated - MIN), completed: iso(updated) }), stderr: "" };
+    }
+    if (path.includes("actions/runners")) return { code: 0, stdout: "", stderr: "" };
+    throw new Error(`unexpected ${cmd} ${args.join(" ")}`);
+  };
+  const done = { 7: { at: now - 10 * MIN, repo: "acme/web", jobs: [{ id: 70, run: 7, conclusion: "failure" }] } };
+  const refreshed = await loadJobs(config, done, now);
+  assert.ok(reads.includes(7), "new runs must not starve a known changed run");
+  assert.equal(reads.length, 8, "the finished-run fetch limit still applies");
+  assert.deepEqual(refreshed.done[7].jobs.map((j) => [j.id, j.conclusion]), [[71, "success"]]);
+  assert.ok(!refreshed.jobs.some((j) => j.id === 70));
+  // The one deferred new run is backfilled on the next poll; the rerun is cached again.
+  reads.length = 0;
+  const next = await loadJobs(config, refreshed.done, now);
+  assert.deepEqual(reads, [13]);
+  assert.equal(Object.keys(next.done).length, 9);
+});
