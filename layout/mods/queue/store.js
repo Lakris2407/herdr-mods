@@ -25,11 +25,11 @@ export const removeFile = (path) => fs.unlink(path).catch(() => {});
 // queue-files/view/ to be shown large. One copy at a time: the next one removes the last.
 // Returns the path image() takes; the note keeps the original path.
 export async function viewCopy(src, id) {
-  const dir = `${filesDir()}/view`, ext = src.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? "png";
-  await fs.mkdir(dir, { recursive: true });
-  for (const old of await fs.readdir(dir).catch(() => [])) await removeFile(`${dir}/${old}`);
-  await fs.copyFile(src, `${dir}/${id}.${ext}`);
-  return `queue-files/view/${id}.${ext}`;
+  const ext = src.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? "png", name = `${id}.${ext}`;
+  // A shell copy, as files-plus does: the mod's file calls reach only below the app home.
+  const r = await exec("sh", ["-c", 'mkdir -p "$1" && rm -f "$1"/* && cp "$2" "$1/$3"', "queue", `${filesDir()}/view`, src, name]);
+  if (r.code !== 0) throw new Error(r.stderr.trim() || "the image could not be copied");
+  return `queue-files/view/${name}`;
 }
 
 // A file that is not an image opens in the app the system picks. macOS only.
