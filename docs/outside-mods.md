@@ -99,6 +99,35 @@ The Issues tab, after a critique of a bot-heavy backlog (45 open, 8 of them `[gr
   switch tabs, R refreshes, Esc leaves. A click in the list gives the panel the keyboard.
 - A full list's count reads "50+".
 
+A folder that is gone (a worktree removed after its merge) made the panel read "`herdr.exec`: cannot
+run gh: No such file or directory (os error 2)": the start error names `gh`, but the missing thing
+is the folder it was to run in. `gh()` in `panel.js` now catches that error and asks `test -d` on the
+same machine:
+
+```js
+async function gh(args, cwd, on) {
+  let r;
+  try { r = await exec("gh", args, { cwd, on }); }
+  catch (e) {
+    if (!/os error 2|No such file/i.test(String(e))) throw e;
+    const there = await exec("test", ["-d", cwd], { on }).then((t) => t.code === 0, () => true);
+    if (!there) {
+      const home = spaces().find((s) => s.active)?.folder;
+      if (home && home !== cwd) return gh(args, home, on);
+      throw new Error(`This folder is gone: ${cwd}`);
+    }
+    r = await exec("/opt/homebrew/bin/gh", args, { cwd, on });
+  }
+  if (r.code !== 0) throw new Error(friendlyError(r.stderr || r.stdout));
+  return JSON.parse(r.stdout);
+}
+```
+
+- The folder is gone: the space's own folder stands in, so the lists still load. If that one is gone
+  too, the panel says "This folder is gone: <path>".
+- The folder is there: `gh` is not on `PATH` (an app started from the Dock can miss Homebrew), so it
+  tries `/opt/homebrew/bin/gh`, as Runners and Stats do.
+
 ## workspace-status-plus
 
 - The theme wrapper.
