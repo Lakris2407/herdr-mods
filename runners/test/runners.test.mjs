@@ -72,6 +72,56 @@ test("GitHub jobs, runner status, lanes and ssh load make one snapshot", async (
   assert.ok(s.jobs.filter((j) => j.short === "WEB").every((j) => j.run === 7));
 });
 
+test("a machine ssh can't reach turns offline only after a minute of failed reads", async () => {
+  state.files.set(CONFIG, JSON.stringify({
+    repos: [], machines: [{ name: "Kris mini", ssh: "me@mini", lanes: "k" }],
+    lanes: { name: "game", short: "GAME", command: ["status-cmd"], cwd: "/repo" },
+  }));
+  let up = true;
+  state.exec = async (cmd) => {
+    if (cmd === "ssh") return up ? { code: 0, stdout: "{ 2.00 1.00 1.00 }\n8\n", stderr: "" }
+      : { code: 255, stdout: "", stderr: "Connection timed out during banner exchange" };
+    if (cmd === "status-cmd") return { code: 0, stdout: up ? "k core: free\n" : "k core: unreachable\n", stderr: "" };
+    throw new Error(`unexpected ${cmd}`);
+  };
+  const realNow = Date.now, start = realNow();
+  const at = async (ms) => {
+    Date.now = () => start + ms;
+    poll.refresh();
+    Date.now = () => start + ms + 1;
+    const before = poll.snapshot()?.at;
+    const cx = { spawn: (f) => f(cx), notify() {} };
+    await poll.tick(cx);
+    for (let i = 0; i < 100 && poll.snapshot()?.at === before; i++) await new Promise((r) => setTimeout(r, 5));
+    return poll.snapshot().machines[0];
+  };
+  try {
+    state.shared.clear();
+    let m = await at(0);
+    assert.deepEqual([m.runners[0].status, m.load, m.loadError], ["online", 2, null]);
+    // A short drop: the lane and the load keep their last values.
+    up = false;
+    m = await at(20000);
+    assert.deepEqual([m.runners[0].status, m.load, m.loadError], ["online", 2, null]);
+    m = await at(50000);
+    assert.equal(m.runners[0].status, "online");
+    // Back before the minute: the outage clock starts over.
+    up = true;
+    m = await at(70000);
+    assert.deepEqual([m.runners[0].status, m.runners[0].downSince, m.loadErrorSince], ["online", null, null]);
+    // A real outage: offline once reads have failed for a minute.
+    up = false;
+    m = await at(90000);
+    assert.equal(m.runners[0].status, "online");
+    m = await at(150000);
+    assert.equal(m.runners[0].status, "offline");
+    assert.equal(m.load, null);
+    assert.equal(m.loadError, "unreachable");
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test("lanes status and history parse into jobs", () => {
   const cfg = { name: "game", short: "GAME", hosts: { "build-1.local": "b1" } };
   const st = lanes.parseStatus(cfg, "b1 unity: unreachable\nb1 warm: idle 3 min\nlocal core: busy (no details)\nJoined callers:\n  joined: core core args:  branch: m commit: a worktree: w 5s logs: /tmp/j\n", now);

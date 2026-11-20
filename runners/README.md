@@ -143,7 +143,8 @@ Waiting callers:
 A lane is `free`, `busy (no details)`, `unreachable`, or runs a job: lane, job, then `args:`,
 `branch:`, `commit:`, `worktree:`, the seconds it has run (`42s`) and `logs:`. A `<machine> warm:`
 line shows as free text under the machine. `joined:` lines (callers waiting for an identical job)
-are read but not counted as waiting. The optional history file has one JSON record per finished job:
+are read but not counted as waiting. An `unreachable` lane, like a failed ssh load read, turns red only after
+its reads have failed for a minute; a short network drop keeps the last status. The optional history file has one JSON record per finished job:
 `{ token, job, lane, host, branch, worktree, commit, args, outcome: "pass" | "fail" | ..., logs,
 times: { request, lock, end } }` with times in epoch seconds; `hosts` maps `host` to a machine's
 `lanes` name. History gives the Finished list, the timeline's past, and the usual length of each job.
