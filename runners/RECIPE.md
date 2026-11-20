@@ -19,7 +19,7 @@ slots, the lanes of a lock-based job script, and each machine's load over ssh.
   at most 6 rows each. Footer: Open panel, Timeline.
 - **Panel**: header with Timeline and Refresh (`updated Ns ago`, amber after a failed read or 3 min
   without one); a banner only when a slot is offline (`ansi1`) or ssh fails (`ansi3`), naming
-  each; tiles for waiting, failed in the last hour, slots busy and today's median wait; Waiting
+  each (a lane or ssh read must fail for a minute first, so a short network drop shows nothing); tiles for waiting, failed in the last hour, slots busy and today's median wait; Waiting
   (only when some wait); Running (elapsed / usual, a 3 px bar, amber past 1.2x usual); a card per
   machine (load bar, optional `warm:` text, a 17 px bar per slot naming its job, a dashed empty bar
   and one `No status: needs repo admin` line for slots without status, a hot border at load per core >= 0.9);

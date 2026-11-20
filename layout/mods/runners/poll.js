@@ -11,6 +11,10 @@ import { jobKey, median, label, offlineNews, offlineToast } from "./model.js";
 export const KEY = "runners.v1";
 const LOCK = "runners.lock", REFRESH = "runners.refresh";
 const BUSY_MS = 20000, IDLE_MS = 60000, LOAD_MS = 60000, LOCK_MS = 45000;
+// A machine counts as unreachable over ssh only after its reads have failed for this long:
+// a Tailscale path can drop for 30-50 s while the machine itself stays up.
+export const GRACE_MS = 60000;
+const outage = (since, now) => ({ since: since ?? now, over: now - (since ?? now) >= GRACE_MS });
 
 export const snapshot = () => shared(KEY) ?? null;
 export const refresh = () => setShared(REFRESH, Date.now());
@@ -70,17 +74,30 @@ async function read(prev, now) {
     name, label: name, job: busyOn.get(name) ?? null,
     status: runners[name]?.status ?? (busyOn.has(name) ? "online" : "unknown"),
   });
-  // A machine's lanes are the ones the status command reports for its name.
-  const laneSlots = (key) => Object.entries(ln?.lanes ?? {}).filter(([name]) => name.startsWith(`${key} `)).map(([name, l]) => ({
-    name, label: `${name.slice(key.length + 1)} lane`, job: busyOn.get(name) ?? null,
-    status: l.state === "unreachable" ? "offline" : "online",
-  }));
+  // A machine's lanes are the ones the status command reports for its name. An ssh call that
+  // fails once (a short Tailscale drop) keeps the lane's last status until it has failed for GRACE_MS.
+  const laneSlots = (key, old) => Object.entries(ln?.lanes ?? {}).filter(([name]) => name.startsWith(`${key} `)).map(([name, l]) => {
+    const was = old?.runners.find((r) => r.name === name);
+    const down = l.state === "unreachable" ? outage(was?.downSince, now) : null;
+    return {
+      name, label: `${name.slice(key.length + 1)} lane`, job: busyOn.get(name) ?? null,
+      status: !down ? "online" : down.over ? "offline" : was?.status ?? "unknown", downSince: down?.since ?? null,
+    };
+  });
+  // The same for the load read: within the grace the last numbers stay and no error shows.
+  const machineLoadNow = (l, old) => {
+    if (!l?.error) return { load: l?.load ?? null, cores: l?.cores ?? null, loadError: null, loadErrorSince: null };
+    const down = outage(old?.loadErrorSince, now);
+    return down.over ? { load: null, cores: null, loadError: l.error, loadErrorSince: down.since }
+      : { load: old?.load ?? null, cores: old?.cores ?? null, loadError: old?.loadError ?? null, loadErrorSince: down.since };
+  };
   const machines = config.machines.map((m, i) => {
     const old = prev?.machines?.find((p) => p.name === m.name);
-    const l = loads ? loads[i] : old;
-    const lanes = m.lanes ? laneSlots(m.lanes) : [];
-    return { name: m.name, ssh: m.ssh ?? null, load: l?.load ?? null, cores: l?.cores ?? null, loadError: l?.error ?? l?.loadError ?? null,
-      warm: m.lanes ? ln?.warm[m.lanes] ?? null : null, runners: [...lanes, ...(m.runners ?? []).map(slot)] };
+    const l = loads ? machineLoadNow(loads[i], old) : old;
+    const lanes = m.lanes ? laneSlots(m.lanes, old) : [];
+    return { name: m.name, ssh: m.ssh ?? null, load: l?.load ?? null, cores: l?.cores ?? null, loadError: l?.loadError ?? null,
+      loadErrorSince: l?.loadErrorSince ?? null, warm: m.lanes ? ln?.warm[m.lanes] ?? null : null,
+      runners: [...lanes, ...(m.runners ?? []).map(slot)] };
   });
   // A slot no machine lists still shows, so a new runner is never invisible.
   const listed = new Set(machines.flatMap((m) => m.runners.map((r) => r.name)));
