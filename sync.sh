@@ -24,6 +24,12 @@ for folder in "${folders[@]}"; do
     rsync -a --delete --exclude jsconfig.json --exclude gpui-kit.d.ts "$mod" "$APP_HOME/mods/$name/"
     herdr-app check "$APP_HOME/mods/$name"
   done
+  # Themes are this repo's own, so a newer one replaces the installed copy.
+  for file in "$REPO_DIR/$folder"/themes/*.json; do
+    [ -f "$file" ] || continue
+    mkdir -p "$APP_HOME/themes"
+    cp "$file" "$APP_HOME/themes/$(basename "$file")"
+  done
   for file in "$REPO_DIR/$folder"/layouts/*.json; do
     [ -f "$file" ] || continue
     mkdir -p "$APP_HOME/layouts"

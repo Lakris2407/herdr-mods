@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { weekStart, weekStarts, isPromotion, median, buildStats, waitingOn, duration, change, plainError, TIME_WORDS, aiTools, num, compact } from "../mods/stats/stats.js";
+import { weekStart, weekStarts, isPromotion, median, buildStats, waitingOn, duration, change, plainError, TIME_WORDS, aiTools, num, compact, themeName, posterNumbers } from "../mods/stats/stats.js";
 import { contrast, readable } from "../mods/stats/colors.js";
 import { demoRaw } from "../mods/stats/demo.js";
 
@@ -245,4 +245,22 @@ test("commits this week add up across repos, and stay null when no weekly count 
   assert.equal(s.commitsThisWeek, 3);
   assert.equal(s.merged30, 2, "a claude/ branch PR is still counted: nothing is filtered by branch name");
   assert.equal(buildStats({ prs, commits: {}, now, weeks: 1 }).commitsThisWeek, null);
+});
+
+test("themeName reads a plain theme or the half that matches the appearance", () => {
+  assert.equal(themeName({ theme: "poster" }), "poster");
+  assert.equal(themeName({ theme: { light: "poster", dark: "graphite" }, dark: false }), "poster");
+  assert.equal(themeName({ theme: { light: "poster", dark: "graphite" }, dark: true }), "graphite");
+  assert.equal(themeName({}), null);
+  assert.equal(themeName(null), null);
+});
+
+test("posterNumbers sums the last 8 weeks and floors the AI share", () => {
+  const weeks = Array.from({ length: 12 }, (_, n) => ({ start: n, merged: n + 1 }));
+  const p = posterNumbers({ weeks, ai: { claude: 5, codex: 1, both: 1, none: 2, total: 9 } });
+  assert.equal(p.weeks.length, 8);
+  assert.equal(p.weeks[0].start, 4);
+  assert.equal(p.merged, 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12);
+  assert.equal(p.aiShare, 77);
+  assert.equal(posterNumbers({ weeks, ai: { claude: 0, codex: 0, both: 0, none: 0, total: 0 } }).aiShare, null);
 });
