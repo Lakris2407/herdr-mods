@@ -77,6 +77,10 @@ names its week and count in a tooltip. Waiting on you, Last 30 days and By repo 
 cards, and the status and a solid Refresh button sit in a footer. Any other theme brings back the
 usual panel.
 
+<img src="poster.png" alt="Stats panel in the poster look (demo data)" width="362">
+
+The screenshot uses made-up data.
+
 `./sync.sh stats` installs the theme into `~/.config/herdr-app/themes/`. Pick it in Settings → Look,
 or run `herdr-app do app.theme '{"name":"poster"}'`. It is a light theme, so it fills the light half
 of the layout's theme: with `"appearance": "dark"` in settings.json, switch the appearance to Light to
