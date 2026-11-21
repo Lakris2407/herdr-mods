@@ -208,3 +208,25 @@ export function plainError(message) {
   if (/^gh is not installed|^Run gh auth login|is not valid JSON$/.test(m)) return m;
   return m ? `GitHub returned an error: ${m}` : "Couldn't load your numbers. Refresh to try again.";
 }
+
+// The poster look (themes/poster.json): the panel turns into one big card when that theme is shown.
+export const POSTER = "poster";
+export const POSTER_WEEKS = 8;
+
+// The theme the app shows now, from `settings()`: a name, or `{light, dark}` picked by the appearance.
+export function themeName(settings) {
+  const t = settings?.theme;
+  return typeof t === "string" ? t : t?.[settings?.dark ? "dark" : "light"] ?? null;
+}
+
+// The poster's numbers: the last weeks oldest first, PRs merged in them, and the share of the last
+// 30 days' PRs with an AI mark (rounded down, null when no PR was rated).
+export function posterNumbers(s, count = POSTER_WEEKS) {
+  const weeks = s.weeks.slice(-count);
+  const { claude, codex, both, total } = s.ai;
+  return {
+    weeks,
+    merged: weeks.reduce((n, w) => n + w.merged, 0),
+    aiShare: total ? Math.floor(100 * (claude + codex + both) / total) : null,
+  };
+}

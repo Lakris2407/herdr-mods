@@ -3,10 +3,11 @@
 // Data comes from `gh` (load.js) and is kept in shared state for 30 minutes, so opening the panel is instant.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, exec, run, shared, setShared, nextCommand, layout, props as blockProps } from "herdr";
+import { theme, exec, run, shared, setShared, nextCommand, layout, settings, props as blockProps } from "herdr";
 import { loadRaw } from "./load.js";
 import { demoRaw } from "./demo.js";
-import { buildStats, duration, change, plainError, TIME_WORDS, STALE_PR_DAYS, num, compact } from "./stats.js";
+import { buildStats, duration, change, plainError, TIME_WORDS, STALE_PR_DAYS, num, compact, themeName, POSTER } from "./stats.js";
+import { posterHero, posterCard, posterTitle } from "./poster.js";
 import { readable, isLight, roles } from "./colors.js";
 
 // A minute's tick keeps "updated 5m ago" true and reloads once the numbers are 30 minutes old.
@@ -116,7 +117,9 @@ const WAITING = {
 export default class Stats extends View {
   init(props, cx) {
     // `{ "demo": true }` in the block's props: made-up numbers for screenshots, no `gh`, no shared state.
-    this.demo = Boolean((props ?? blockProps())?.demo);
+    // `{ "look": "poster" }` keeps the poster look whatever the theme; without it the poster theme turns it on.
+    this.props = props ?? blockProps() ?? {};
+    this.demo = Boolean(this.props.demo);
     this.cache = this.demo ? { at: Date.now(), stats: buildStats(demoRaw()) } : shared(CACHE) ?? null;
     this.handle = cx.focus_handle();
     this.at = 0; // the keyboard cursor over this.actions
@@ -155,11 +158,11 @@ export default class Stats extends View {
   // keyboard walks the same list the mouse sees: up and down move, Enter opens, R refreshes. Each one
   // names itself for a screen reader, and the one under the cursor says it is the current one.
   // `edge` is the 2px border's color when the cursor is elsewhere: the surface it sits on.
-  action(el, id, act, t, { label, role = "link", edge = t.raised } = {}) {
+  action(el, id, act, t, { label, role = "link", edge = t.raised, hover = t.hover } = {}) {
     const n = this.actions.push(act) - 1, cursor = n === this.at && this.handle.is_focused();
     return el.id(id).role(role).when(Boolean(label), (e) => e.accessibility_label(label))
       .cursor_pointer().border_2().border_color(cursor ? this.ink.ring : edge).when(cursor, (e) => e.aria_active_descendant())
-      .hover((e) => e.bg(t.hover)).on_click((_e, cx) => { this.at = n; act(cx); cx.notify(); });
+      .hover((e) => e.bg(hover)).on_click((_e, cx) => { this.at = n; act(cx); cx.notify(); });
   }
 
   key(e, cx) {
@@ -209,6 +212,12 @@ export default class Stats extends View {
   }
 
   card(title, sub, body, t, ink, aside = null) {
+    if (this.poster) {
+      return posterCard(t).child(posterTitle(title, aside, t, ink))
+        .child(v_flex().px(14).pt(10).pb(12).gap(8)
+          .when(Boolean(sub), (e) => e.child(div().min_w(0).truncate().text_size(11).text_color(ink.hint).child(sub)))
+          .when(body != null, (e) => e.child(body)));
+    }
     return v_flex().gap(8).px(10).pt(10).pb(10).rounded(8).bg(t.raised)
       .child(h_flex().gap(8).items_start()
         .child(v_flex().flex_1().min_w(0)
@@ -349,10 +358,10 @@ export default class Stats extends View {
     const before = "the 30 days before";
     const repos = s.repos.filter((r) => r.commits > 0).length;
     const rate = s.decided ? `${s.mergeRate}% merged of ${plural(s.decided, "PR")} closed` : "No PRs closed yet";
-    return v_flex().gap(10)
-      .child(this.hero(s, t, ink))
+    return v_flex().gap(this.poster ? 14 : 10)
+      .child(this.poster ? posterHero(s, t, ink) : this.hero(s, t, ink))
       .child(this.waiting(s, t, ink))
-      .child(this.card("Last 12 weeks", "PRs merged · releases to main not counted",
+      .when(!this.poster, (e) => e.child(this.card("Last 12 weeks", "PRs merged · releases to main not counted",
         this.bars("wk", weeks.map((w) => ({ ...w, value: w.merged })), {
           height: 100, now: last, ghost: p?.projected ?? null,
           label: (w, n) => (n === last ? "now" : n % 3 === 0 ? short(w.start) : ""),
@@ -360,7 +369,7 @@ export default class Stats extends View {
           tip: (w) => (w === weeks[last] && p?.projected != null
             ? `This week so far: ${plural(w.merged, "PR")}, heading for about ${num(p.projected)}`
             : `Week of ${short(w.start)}: ${plural(w.merged, "PR")} merged`),
-        }, t, ink), t, ink))
+        }, t, ink), t, ink)))
       .child(this.card("Last 30 days", "all your repos", v_flex()
         .child(this.row("PRs merged", num(s.merged30), this.line(versus(change(s.merged30, s.mergedPrev30), before, "more"), ink), t, ink, true))
         .child(this.row("Median time to merge", duration(s.medianHours),
@@ -382,6 +391,7 @@ export default class Stats extends View {
   render(cx) {
     const t = theme(), ink = inks(t), s = this.cache?.stats;
     this.ink = ink; this.actions = [];
+    this.poster = this.props.look ? this.props.look === POSTER : themeName(settings()) === POSTER;
     const stale = Boolean(this.cache) && Date.now() - this.cache.at > STALE;
     const focused = this.handle.is_focused();
     // One status, in the header: what the panel is doing, or how old the numbers are when a refresh
@@ -390,15 +400,31 @@ export default class Stats extends View {
       : this.error && this.cache ? `Couldn't refresh · numbers from ${ago(this.cache.at)}`
         : this.cache ? `updated ${ago(this.cache.at)}` : "";
     const warn = !this.loading && (Boolean(this.error) || stale);
-    const refresh = this.action(div().px(8).h(24).flex().items_center().rounded(6).bg(t.raised).text_size(11)
-      .text_color(this.loading ? ink.hint : ink.button), "stats-refresh", (cx) => this.load(cx), t,
-      { label: this.loading ? "Refreshing" : "Refresh now", role: "button" })
+    // The poster's Refresh is a solid button, like a primary action; the plain look keeps a quiet one.
+    const look = this.poster
+      ? div().px(14).h(30).flex().items_center().rounded(4).bg(t.solid).text_size(13).font_semibold()
+        .text_color(this.loading ? readable(t.dim, t.solid, 3) : t.solid_foreground)
+      : div().px(8).h(24).flex().items_center().rounded(6).bg(t.raised).text_size(11).text_color(this.loading ? ink.hint : ink.button);
+    const refresh = this.action(look, "stats-refresh", (cx) => this.load(cx), t,
+      { label: this.loading ? "Refreshing" : "Refresh now", role: "button", ...(this.poster && { hover: t.muted }) })
       .disabled(Boolean(this.loading)).tooltip("Refresh now (R when the panel has the keyboard)").child("Refresh");
-    const body = v_flex().id("stats-body").flex_1().min_h(0).overflow_y_scrollbar().p(10).gap(10)
+    const body = v_flex().id("stats-body").flex_1().min_h(0).overflow_y_scrollbar().p(this.poster ? 12 : 10).gap(10)
       .when(Boolean(this.error), (e) => e.child(div().px(2).text_size(11).text_color(s ? ink.headerWarn : ink.fail).child(this.error)))
       .when(!s && !this.error, (e) => e.child(div().p(4).text_color(ink.header).child("Loading your numbers from GitHub… the first load takes about 15 seconds.")))
       .when(Boolean(s), (e) => e.child(this.body(s, t, ink)));
     this.at = Math.min(this.at, Math.max(0, this.actions.length - 1));
+    const keys = (e) => e.child(div().flex_none().px(12).py(4).border_b(1).border_color(t.border).truncate()
+      .text_size(10).text_color(ink.header).child("↑ ↓ move · Enter opens · R refreshes · Esc leaves"));
+    // The poster puts the title on its first card, so the status and Refresh sit in a footer instead.
+    if (this.poster) {
+      return v_flex().id("stats").role("pane").accessibility_label("Your stats").track_focus(this.handle).on_key_down((e, cx) => this.key(e, cx))
+        .size_full().min_h(0).overflow_hidden().bg(t.canvas).text_color(t.foreground).text_size(13)
+        .when(focused, keys)
+        .child(body)
+        .child(h_flex().h(54).flex_none().px(14).gap(10).items_center().bg(t.raised).border_t(1).border_color(t.border)
+          .child(div().flex_1().min_w(0).truncate().text_size(13).text_color(warn ? ink.headerWarn : ink.label).child(status))
+          .child(refresh.flex_none()));
+    }
     return v_flex().id("stats").role("pane").accessibility_label("Your stats").track_focus(this.handle).on_key_down((e, cx) => this.key(e, cx))
       .size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border)
       .text_color(t.foreground).text_size(13)
@@ -407,8 +433,7 @@ export default class Stats extends View {
         .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(warn ? ink.headerWarn : ink.header).child(status))
         .child(refresh.flex_none()))
       // The keys, shown only while the panel has the keyboard.
-      .when(focused, (e) => e.child(div().flex_none().px(12).py(4).border_b(1).border_color(t.border).truncate()
-        .text_size(10).text_color(ink.header).child("↑ ↓ move · Enter opens · R refreshes · Esc leaves")))
+      .when(focused, keys)
       .child(body);
   }
 }

@@ -67,6 +67,25 @@ count commits on a branch other than the default, create `~/.config/herdr-app/st
 `{ "demo": true }` in the stats block's `props` (`"content": { "mod": "stats", "props": { "demo": true } }`)
 shows made-up numbers and runs nothing. The screenshot above uses it.
 
+## Poster look
+
+A second look for the panel, picked with the theme: `themes/poster.json` is a light theme with a
+grey canvas, white square cards, black ink and one orange accent. While it is shown, the panel turns
+into a poster: a "Your stats · 8 weeks" card with PRs merged in those 8 weeks and the AI share of the
+last 30 days in a pixel font, then the 8 weeks as tall black bars with this week in orange. Each bar
+names its week and count in a tooltip. Waiting on you, Last 30 days and By repo follow as square
+cards, and the status and a solid Refresh button sit in a footer. Any other theme brings back the
+usual panel.
+
+`./sync.sh stats` installs the theme into `~/.config/herdr-app/themes/`. Pick it in Settings → Look,
+or run `herdr-app do app.theme '{"name":"poster"}'`. It is a light theme, so it fills the light half
+of the layout's theme: with `"appearance": "dark"` in settings.json, switch the appearance to Light to
+see it, and back to Dark for your dark theme. `{ "look": "poster" }` in the block's `props` keeps the
+poster look with any theme; `{ "look": "plain" }` never shows it.
+
+The pixel font is [Silkscreen](https://github.com/googlefonts/silkscreen) (SIL Open Font License,
+`fonts/OFL.txt`), in the mod's `fonts/` folder, which Herdr loads by itself.
+
 ## Data and speed
 
 Everything comes from `gh api graphql`, so [`gh`](https://cli.github.com) must be logged in
