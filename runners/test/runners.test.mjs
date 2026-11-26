@@ -7,6 +7,7 @@ const stub = new URL("./herdr-stub.mjs", import.meta.url).href;
 registerHooks({ resolve: (spec, ctx, next) => (spec === "herdr" ? { url: stub, shortCircuit: true } : next(spec, ctx)) });
 const { state } = await import("./herdr-stub.mjs");
 const poll = await import("../mods/runners/poll.js");
+const load = await import("../mods/runners/load.js");
 const model = await import("../mods/runners/model.js");
 const lanes = await import("../mods/runners/lanesource.js");
 
@@ -120,6 +121,34 @@ test("a machine ssh can't reach turns offline only after a minute of failed read
   } finally {
     Date.now = realNow;
   }
+});
+
+test("a running listener decides online and offline, whatever GitHub says", async () => {
+  state.files.set(CONFIG, JSON.stringify({
+    repos: [{ repo: "acme/web", short: "WEB" }],
+    machines: [{ name: "Box", ssh: "box", runners: ["ci-1", "ci-2", "ci-3"],
+      listeners: { "ci-1": "/home/a/actions-runner-1/", "ci-2": "/home/b/actions-runner-2/" } }],
+  }));
+  state.exec = async (cmd, args) => {
+    if (cmd === "gh" && args[1].includes("actions/runs?")) return { code: 0, stdout: "", stderr: "" };
+    if (cmd === "gh" && args[1].includes("actions/runners")) return { code: 0, stdout: [
+      { name: "ci-1", status: "offline", busy: false }, { name: "ci-2", status: "online", busy: false }, { name: "ci-3", status: "offline", busy: false },
+    ].map((r) => JSON.stringify(r)).join("\n"), stderr: "" };
+    // A Linux machine: the load from /proc/loadavg and nproc, then the one listener that runs.
+    if (cmd === "ssh") return { code: 0, stdout: "0.33\n4\n---\n/home/a/actions-runner-1/bin/Runner.Listener run --startuptype service\n", stderr: "" };
+    throw new Error(`unexpected ${cmd} ${args.join(" ")}`);
+  };
+  const m = (await read()).machines[0];
+  assert.deepEqual([m.load, m.cores], [0.33, 4]);
+  // ci-1 runs its listener, ci-2 does not, and ci-3 names no folder, so GitHub's word stands.
+  assert.deepEqual(m.runners.map((r) => [r.name, r.status]), [["ci-1", "online"], ["ci-2", "offline"], ["ci-3", "offline"]]);
+});
+
+test("an ssh call that hangs after it connects is stopped and says so", async () => {
+  let options;
+  state.exec = async (cmd, args, opts) => { options = opts; throw new Error("`herdr.exec`: ssh took longer than 15 s and was stopped"); };
+  assert.deepEqual(await load.machineLoad("box"), { error: "no answer in 15 s" });
+  assert.equal(options.timeout, 15000);
 });
 
 test("lanes status and history parse into jobs", () => {
