@@ -46,7 +46,12 @@ GitHub Actions runners and any machine you can reach over ssh.
   it asks for `self-hosted` or one of your `labels`, or runs on a runner you list. Online and busy
   come from `actions/runners`; that endpoint needs repo admin, so without it a slot shows an empty
   dashed bar, and its machine says `needs repo admin`, until a job runs on it.
-- **Machine load** over ssh: `sysctl -n vm.loadavg hw.ncpu` (macOS), the 1-minute load per core.
+- **Machine load** over ssh: the 1-minute load per core, from `sysctl` on macOS and `/proc/loadavg`
+  on Linux.
+- **Runner listeners (optional)**, in the same ssh call: the `Runner.Listener` processes on the
+  machine. A runner whose folder you name in `listeners` is online while its listener runs and
+  offline when it does not, whatever GitHub says. GitHub's list can call a runner offline while it
+  takes and finishes jobs, and it needs repo admin; the process list needs neither.
 - **A lock-based job runner of your own (optional):** a script that runs jobs on your machines
   with a lock per lane, read through its `status` command and a history file. See
   [Lanes](#lanes).
@@ -58,7 +63,10 @@ waits or runs, every 60 s when idle, load every 60 s.
 
 - The Herdr desktop app (`herdr-app`).
 - [`gh`](https://cli.github.com), logged in (`gh auth login`), for GitHub runners.
-- ssh keys that log in without a prompt (`BatchMode`), for machine load.
+- ssh keys that log in without a prompt (`BatchMode`), for machine load. A key in an agent that asks
+  you to approve each use (1Password, for one) does not work: the read comes from the app in the
+  background, waits for the approval, and the machine says `no answer in 15 s`. Give the machine a
+  key file of its own.
 
 ## Install
 
@@ -106,7 +114,7 @@ Nothing is built in; the mod reads only what this file lists.
 | Key | What it does |
 |---|---|
 | `repos` | GitHub repos whose Actions jobs to watch. `short` is the tag on each job; `color` a theme color name (`ansi0`..`ansi15`, `accent`, ...). |
-| `machines` | One card each. `ssh` (optional) reads the load. `runners` are GitHub runner names on that machine. `lanes` is the machine's name in the lanes `status` output. Runners no machine lists go under "Other runners". |
+| `machines` | One card each. `ssh` (optional) reads the load. `runners` are GitHub runner names on that machine. `listeners` (optional, needs `ssh`) maps a runner name to its runner folder, `{ "web-mini-1": "/Users/ci/actions-runner/" }`: the runner is online while a `Runner.Listener` runs from that folder. `lanes` is the machine's name in the lanes `status` output. Runners no machine lists go under "Other runners". |
 | `labels` | Extra job labels that mean "runs on my runners", for jobs that do not ask for `self-hosted`. |
 | `lanes` | Optional lock-based runner, below. |
 | `waitAlertMinutes` | Toast when a job waits this long (default 5). |
@@ -155,7 +163,8 @@ Use [Controls](../controls/) to hide the chip or the panel button.
 
 ## What it runs
 
-`gh api` (read-only GET requests), `ssh <host> sysctl -n vm.loadavg hw.ncpu`, your lanes `status`
+`gh api` (read-only GET requests), one read-only `ssh <host>` command per machine (the load from
+`sysctl` or `/proc/loadavg`, the core count, and `ps` for the runner listeners), your lanes `status`
 command, and `open` for the links you click (https only, or a lanes job's local log folder). It
 reads `runners.json` and your lanes history file. It makes no other network requests and stores no
 tokens; `gh` and ssh keep their own credentials.

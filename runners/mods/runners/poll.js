@@ -70,9 +70,12 @@ async function read(prev, now) {
   ]);
   const { done, runners } = gh, jobs = [...gh.jobs, ...(ln?.jobs ?? [])];
   const busyOn = new Map(jobs.filter((j) => j.status === "in_progress" && j.runner).map((j) => [j.runner, j.id]));
-  const slot = (name) => ({
+  // `alive` is whether the machine runs the slot's listener (true or false), or null when nobody looked.
+  // A running listener beats GitHub's "offline": GitHub's runner list can call a runner offline while it
+  // takes and finishes jobs (seen after a repo moved to another owner). A missing listener is offline.
+  const slot = (name, alive = null) => ({
     name, label: name, job: busyOn.get(name) ?? null,
-    status: runners[name]?.status ?? (busyOn.has(name) ? "online" : "unknown"),
+    status: busyOn.has(name) ? "online" : alive === false ? "offline" : alive ? "online" : runners[name]?.status ?? "unknown",
   });
   // A machine's lanes are the ones the status command reports for its name. An ssh call that
   // fails once (a short Tailscale drop) keeps the lane's last status until it has failed for GRACE_MS.
@@ -86,23 +89,25 @@ async function read(prev, now) {
   });
   // The same for the load read: within the grace the last numbers stay and no error shows.
   const machineLoadNow = (l, old) => {
-    if (!l?.error) return { load: l?.load ?? null, cores: l?.cores ?? null, loadError: null, loadErrorSince: null };
+    if (!l?.error) return { load: l?.load ?? null, cores: l?.cores ?? null, listeners: l?.listeners ?? null, loadError: null, loadErrorSince: null };
     const down = outage(old?.loadErrorSince, now);
-    return down.over ? { load: null, cores: null, loadError: l.error, loadErrorSince: down.since }
-      : { load: old?.load ?? null, cores: old?.cores ?? null, loadError: old?.loadError ?? null, loadErrorSince: down.since };
+    return down.over ? { load: null, cores: null, listeners: null, loadError: l.error, loadErrorSince: down.since }
+      : { load: old?.load ?? null, cores: old?.cores ?? null, listeners: old?.listeners ?? null, loadError: old?.loadError ?? null, loadErrorSince: down.since };
   };
   const machines = config.machines.map((m, i) => {
     const old = prev?.machines?.find((p) => p.name === m.name);
     const l = loads ? machineLoadNow(loads[i], old) : old;
     const lanes = m.lanes ? laneSlots(m.lanes, old) : [];
-    return { name: m.name, ssh: m.ssh ?? null, load: l?.load ?? null, cores: l?.cores ?? null, loadError: l?.loadError ?? null,
-      loadErrorSince: l?.loadErrorSince ?? null, warm: m.lanes ? ln?.warm[m.lanes] ?? null : null,
-      runners: [...lanes, ...(m.runners ?? []).map(slot)] };
+    // A runner with a folder in "listeners" is alive while a listener command line holds that folder.
+    const alive = (name) => (m.listeners?.[name] && l?.listeners ? l.listeners.some((c) => c.includes(m.listeners[name])) : null);
+    return { name: m.name, ssh: m.ssh ?? null, load: l?.load ?? null, cores: l?.cores ?? null, listeners: l?.listeners ?? null,
+      loadError: l?.loadError ?? null, loadErrorSince: l?.loadErrorSince ?? null, warm: m.lanes ? ln?.warm[m.lanes] ?? null : null,
+      runners: [...lanes, ...(m.runners ?? []).map((name) => slot(name, alive(name)))] };
   });
   // A slot no machine lists still shows, so a new runner is never invisible.
   const listed = new Set(machines.flatMap((m) => m.runners.map((r) => r.name)));
   const extra = [...new Set([...Object.keys(runners), ...gh.jobs.map((j) => j.runner).filter(Boolean)])].filter((n) => !listed.has(n) && !n.startsWith("GitHub Actions"));
-  if (extra.length) machines.push({ name: config.machines.length ? "Other runners" : "Runners", ssh: null, load: null, cores: null, loadError: null, warm: null, runners: extra.map(slot) });
+  if (extra.length) machines.push({ name: config.machines.length ? "Other runners" : "Runners", ssh: null, load: null, cores: null, loadError: null, warm: null, runners: extra.map((name) => slot(name)) });
 
   // How long each job usually takes, from the last two hours, kept across restarts.
   const typical = { ...(prev?.typical ?? {}) }, groups = {};

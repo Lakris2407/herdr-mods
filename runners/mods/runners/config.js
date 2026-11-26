@@ -6,6 +6,8 @@
 //                "cwd": "/path/to/repo", "history": "/path/to/repo/.git/runner-history.jsonl", "hosts": { "build-mini.local": "build1" } },
 //     "waitAlertMinutes": 5 }
 // A machine without "ssh" shows no load; "lanes" is its name in the lanes command's output.
+// "listeners": { "runner-name": "/path/to/its/actions-runner/" } on a machine with "ssh": the runner counts as
+// online while a Runner.Listener runs from that folder and offline when none does, whatever GitHub says.
 // A job is watched when it asks for "self-hosted" or one of "labels", or runs on a listed runner.
 // Runners no machine lists go under "Other runners".
 import { readTextFile, appHome } from "herdr";

@@ -7,10 +7,10 @@ const ACTIVE = new Set(["queued", "in_progress", "waiting", "requested", "pendin
 // Jobs of finished runs read per repo per poll: the first read after a start catches up over a few polls.
 const BACKFILL = 8;
 
-async function run(cmd, args) {
-  let r = await exec(cmd, args).catch((e) => ({ code: -1, stdout: "", stderr: String(e) }));
+async function run(cmd, args, options) {
+  let r = await exec(cmd, args, options).catch((e) => ({ code: -1, stdout: "", stderr: String(e) }));
   // Apps started from the Dock can miss Homebrew on PATH: try its arm64 prefix.
-  if (r.code === -1 && cmd === "gh") r = await exec("/opt/homebrew/bin/gh", args).catch((e) => ({ code: -1, stdout: "", stderr: String(e) }));
+  if (r.code === -1 && cmd === "gh") r = await exec("/opt/homebrew/bin/gh", args, options).catch((e) => ({ code: -1, stdout: "", stderr: String(e) }));
   return r;
 }
 
@@ -85,16 +85,26 @@ async function repoRunners(repo) {
   }
 }
 
-// "{ 15.68 24.77 25.57 }\n8" from sysctl: the 1-minute load and the core count.
+// One ssh call: the 1-minute load and the core count ("{ 15.68 24.77 25.57 }\n8" from sysctl on macOS,
+// "1.43\n2" from /proc/loadavg and nproc on Linux), then the command line of every runner listener running.
+// `sh -c` because the login shell on the machine may not be a POSIX one.
+const MACHINE_CMD = `sh -c 'if [ -r /proc/loadavg ]; then cut -d" " -f1 /proc/loadavg; nproc; else sysctl -n vm.loadavg hw.ncpu; fi; ` +
+  `echo ---; ps axo command= | grep "[R]unner.Listener" || true'`;
+// ConnectTimeout ends a connection that never opens. A login that hangs after it (a key in an agent
+// that waits for someone to approve it) ends here, so one machine can't hold up the whole snapshot.
+const SSH_MS = 15000;
+
 export async function machineLoad(host) {
-  const r = await run("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-T", "--", host, "sysctl -n vm.loadavg hw.ncpu"]);
+  const r = await run("ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-T", "--", host, MACHINE_CMD], { timeout: SSH_MS });
   if (r.code !== 0) {
     const msg = (r.stderr || "").trim().split("\n").pop() ?? "";
-    return { error: /Permission denied/.test(msg) ? "ssh key refused" : /resolve|timed out|No route/i.test(msg) ? "unreachable" : msg || `ssh exit ${r.code}` };
+    return { error: /Permission denied/.test(msg) ? "ssh key refused" : /resolve|timed out|No route/i.test(msg) ? "unreachable"
+      : /took longer than/.test(msg) ? `no answer in ${SSH_MS / 1000} s` : msg || `ssh exit ${r.code}` };
   }
-  const [avg, cores] = r.stdout.trim().split("\n");
+  const [head, procs = ""] = r.stdout.split("---\n");
+  const [avg, cores] = head.trim().split("\n");
   const one = Number(/[\d.]+/.exec(avg)?.[0]);
-  return { load: one, cores: Number(cores) || null };
+  return { load: one, cores: Number(cores) || null, listeners: procs.split("\n").filter(Boolean) };
 }
 
 export async function loadJobs(config, done, now) {
